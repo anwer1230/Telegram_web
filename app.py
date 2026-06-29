@@ -1166,6 +1166,13 @@ def load_string_session(user_id):
 def _clean_group_entry(raw: str) -> str:
     import re
     cleaned = raw.strip()
+    if not cleaned:
+        return ''
+    # حماية الروابط والمعرفات الرقمية من التجريد غير المقصود
+    if (cleaned.startswith('https://') or cleaned.startswith('http://')
+            or cleaned.startswith('@') or re.match(r'^-?\d+$', cleaned)):
+        return cleaned
+    # تجريد البوليتات والأرقام والرموز من بداية السطر فقط
     cleaned = re.sub(r'^[\s\u00b7\u2022\u25cf\u25aa\u25ab\u25fe\u25fd\u2023\u203b\u2043\u2219\*\-\–\—\.\،\,\#\>\|•●◾◾✓✦①②③④⑤⑥⑦⑧⑨⑩\d]+[\s.،:]*', '', cleaned)
     return cleaned.strip()
 
@@ -2569,9 +2576,50 @@ class TelegramManager:
         if not entity:
             raise Exception("اسم المجموعة فارغ بعد التنظيف")
 
+        # ── معرّف رقمي (chat ID مثل -1001234567890) ──
+        if _re.match(r'^-?\d+$', entity):
+            try:
+                return client_manager.run_coroutine(
+                    client_manager.client.get_entity(int(entity))
+                )
+            except Exception as e:
+                raise Exception(f"لا يمكن الوصول إلى المعرّف الرقمي {entity}: {e}")
+
+        # ── رابط دعوة خاص (invite link يحتوي على +) ──
+        m_invite = _re.search(r't\.me/\+([A-Za-z0-9_\-]+)', entity)
+        if m_invite:
+            invite_hash = m_invite.group(1)
+            # جرّب ImportChatInviteRequest (ينضم إن لم يكن عضواً)
+            try:
+                from telethon.tl.functions.messages import ImportChatInviteRequest
+                result = client_manager.run_coroutine(
+                    client_manager.client(ImportChatInviteRequest(invite_hash))
+                )
+                if result and hasattr(result, 'chats') and result.chats:
+                    return result.chats[0]
+            except Exception as invite_err:
+                inv_msg = str(invite_err).lower()
+                # إذا كان مصادقاً عليه مسبقاً، جرّب get_entity بالرابط كاملاً
+                if 'already' in inv_msg or 'joined' in inv_msg or 'user_already' in inv_msg:
+                    try:
+                        return client_manager.run_coroutine(
+                            client_manager.client.get_entity(entity)
+                        )
+                    except Exception:
+                        pass
+                # جرّب get_entity بالرابط كاملاً على كل حال
+                try:
+                    return client_manager.run_coroutine(
+                        client_manager.client.get_entity(entity)
+                    )
+                except Exception:
+                    pass
+            raise Exception(f"لا يمكن الوصول إلى رابط الدعوة: {entity}")
+
+        # ── روابط t.me العامة (@username) ──
         # استخراج اسم المستخدم من الروابط مثل https://t.me/username
         username_clean = entity.lstrip('@')
-        m = _re.search(r't\.me/([^/\s\?#]+)', entity)
+        m = _re.search(r't\.me/([^/\s\?#+]+)', entity)  # استثناء + من الأسماء
         if m:
             username_clean = m.group(1)
 
@@ -2586,31 +2634,30 @@ class TelegramManager:
             last_exc = e
 
         # ── المحاولة 2: get_entity مع @ prefix ──
-        try:
-            return client_manager.run_coroutine(
-                client_manager.client.get_entity('@' + username_clean)
-            )
-        except Exception as e:
-            last_exc = e
+        if username_clean and not username_clean.startswith('+'):
+            try:
+                return client_manager.run_coroutine(
+                    client_manager.client.get_entity('@' + username_clean)
+                )
+            except Exception as e:
+                last_exc = e
 
         # ── المحاولة 3: ResolveUsernameRequest — يستعلم مباشرة من سيرفرات تيليجرام ──
         # يعمل لأي مجموعة/قناة عامة حتى لو لم يسبق التفاعل معها
-        try:
-            result = client_manager.run_coroutine(
-                client_manager.client(functions.contacts.ResolveUsernameRequest(
-                    username=username_clean
-                ))
-            )
-            if result and result.chats:
-                return result.chats[0]
-            if result and result.users:
-                return result.users[0]
-        except Exception as e:
-            last_exc = e
+        if username_clean and not username_clean.startswith('+'):
+            try:
+                result = client_manager.run_coroutine(
+                    client_manager.client(functions.contacts.ResolveUsernameRequest(
+                        username=username_clean
+                    ))
+                )
+                if result and result.chats:
+                    return result.chats[0]
+                if result and result.users:
+                    return result.users[0]
+            except Exception as e:
+                last_exc = e
 
-        # ── المحاولة 4: send_message مباشرة بالـ username (Telethon يُحلّه داخلياً) ──
-        # نُعيد username_clean ليُستخدم مباشرةً في send_message كـ string
-        # هذا fallback أخير — إذا فشلت كل المحاولات
         raise Exception(str(last_exc) if last_exc else f"لا يمكن الوصول إلى: {entity}")
 
     def send_message_async(self, user_id, entity, message):
