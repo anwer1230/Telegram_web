@@ -6194,7 +6194,9 @@ class LearningBot:
     # ─── توليد الرد الذكي ────────────────────────────────────────
 
     async def generate_intelligent_response(self, sender_name: str, text: str,
-                                             history: list = None, detected_service: str = None) -> str:
+                                             history: list = None,
+                                             detected_service: str = None,
+                                             style_examples: list = None) -> str:
         if not self.groq_client:
             return self._fallback_response(detected_service)
 
@@ -6211,25 +6213,35 @@ class LearningBot:
                 history_lines.append(f"{role_label}: {msg}")
         history_text = "\n".join(history_lines) if history_lines else "لا توجد رسائل سابقة — هذه أول رسالة."
 
+        # أمثلة أسلوب الرد من المحادثات الفردية السابقة
+        style_text = ""
+        if style_examples:
+            style_lines = []
+            for q, a in style_examples[:10]:
+                style_lines.append(f"  عميل: {q[:80]}\n  أنا:   {a[:80]}")
+            style_text = "\n**أمثلة من ردودي السابقة (اتبع نفس الأسلوب):**\n" + "\n".join(style_lines)
+
         system_prompt = f"""أنت موظف حقيقي متمرس في التسويق تعمل في "مركز سرعة إنجاز" للخدمات الأكاديمية.
 
-**قواعد الرد الإلزامية:**
+**قواعد الرد الإلزامية (التزم بها بدقة):**
 1. استخدم عامية خليجية ودية وطبيعية (هلا، أبشر، مايهمك، تكرم عينك، وش واجبك، الله يوفقك).
 2. ردودك قصيرة جداً — جملة أو جملتان فقط، لا أكثر.
-3. إذا كانت الرسالة تحية (هلا/مرحبا/السلام) → رد بتحية ودية فقط مثل: "هلا والله، أهلاً أخوي، كيف أخدمك؟"
-4. إذا ذكر نوع الخدمة (واجب/بحث/...) → قل "أبشر، ارسل واجبك وأشوفه" أو "ابشر إيش الواجب؟"
-5. إذا سأل "هل تقدر تحل...؟" → أجب بثقة: "اكيد أخوي ما يهمك، ارسل وأشوف".
-6. إذا أرسل المهمة → اسأل: "الي متي تبيه؟" أو "شو آخر موعد عندك؟"
-7. إذا سأل عن السعر مباشرة → أعطه سعراً من النطاق المناسب، وكن مرناً في التفاوض.
-8. لا تذكر السعر من نفسك إلا بعد معرفة تفاصيل المهمة والموعد.
-9. اقرأ التاريخ جيداً وواصل على نفس النمط، لا تغير الأسلوب أو تعيد نفس الكلام.
-10. لا تبدو كبوت أبداً — أنت إنسان حقيقي.
+3. **تحية (هلا/مرحبا/السلام/صباح/مساء):** رد بتحية ودية فقط — لا تذكر الأسعار أو الخدمات.
+   مثال: "وعليكم السلام، هلا أخوي كيف أخدمك؟"
+4. **طلب خدمة (واجب/بحث/ترجمة/...):** رد بـ "أبشر، ارسل المهمة وأشوفها." — لا تذكر السعر بدون رؤية المهمة.
+5. **سؤال عن القدرة (تقدر/تعرف/...):** أجب بثقة: "أكيد أخوي ما يهمك، ارسل وأشوف."
+6. **سؤال عن السعر:** قل "السعر حسب حجم المهمة، ارسل وأحدد لك." — لا تعطِ رقماً قبل رؤية المهمة.
+7. **بعد استلام المهمة:** اسأل "الي متي تبيه؟" ثم حدد السعر.
+8. **تكرار ممنوع:** لا تكرر نفس الرد في رسالتين متتاليتين — غيّر الأسلوب مع الحفاظ على المعنى.
+9. اقرأ تاريخ المحادثة بعناية — لا تطرح أسئلة سبق طرحها.
+10. أنت إنسان حقيقي — لا تبدو كبوت أبداً.
 11. استخدم ايموجي واحد أو اثنين على الأكثر.
 
 **الخدمات المتاحة:**
 {services_info}
 
 **الخدمة المكتشفة الآن:** {detected_service or 'لم تُحدد بعد'}
+{style_text}
 
 **تاريخ المحادثة (اقرأه بعناية لفهم السياق):**
 {history_text}
@@ -6241,7 +6253,7 @@ class LearningBot:
                     {"role": "system", "content": system_prompt},
                     {"role": "user",   "content": f"رسالة من {sender_name}: {text}"}
                 ],
-                max_tokens=200, temperature=0.88
+                max_tokens=200, temperature=0.82
             )
             return resp.choices[0].message.content.strip()
         except Exception as e:
@@ -6263,7 +6275,7 @@ class LearningBot:
 
     async def handle_incoming_message(self, event, client_manager):
         try:
-            user_id   = self.user_id
+            user_id    = self.user_id
             is_private = event.is_private
             is_group   = event.is_group or event.is_channel
 
@@ -6291,12 +6303,21 @@ class LearningBot:
             conv_key = f"{sender_id}_{event.chat_id}"
             detected_service = self.detect_service(text)
 
-            # ── جلب تاريخ Telegram أولاً (الأكثر دقة) ──
+            # ── جلب تاريخ Telegram (أعمق للمحادثات الفردية) ──
             tg_history = []
+            style_examples = []
             if client_manager and client_manager.client:
+                hist_limit = 50 if is_private else 20
                 tg_history = await self._fetch_telegram_history(
-                    client_manager.client, event.chat_id, limit=20
+                    client_manager.client, event.chat_id, limit=hist_limit
                 )
+                # قراءة أسلوب الرد من كل المحادثات الفردية (أول مرة أو كل 20 رسالة)
+                if is_private:
+                    msg_count = len(self._memory.get("conversations", {}).get(conv_key, []))
+                    if msg_count % 20 == 0:
+                        style_examples = await self._read_all_private_style(
+                            client_manager.client, limit=30
+                        )
 
             # ── الذاكرة الدائمة كاحتياطي إذا فشل Telegram ──
             persistent_history = self._get_persistent_history(conv_key)
@@ -6314,7 +6335,8 @@ class LearningBot:
             response = await self.generate_intelligent_response(
                 sender_name, text,
                 history=combined_history,
-                detected_service=detected_service
+                detected_service=detected_service,
+                style_examples=style_examples if is_private else None
             )
 
             # ── حفظ الرد في الذاكرتين ──
@@ -6364,6 +6386,12 @@ class LearningBot:
                 except Exception:
                     pass
 
+            # ── اقتراح أنماط جديدة كل 5 رسائل (للمحادثات الفردية فقط) ──
+            if is_private:
+                total_msgs = len(self._memory.get("conversations", {}).get(conv_key, []))
+                if total_msgs > 0 and total_msgs % 5 == 0:
+                    self._notify_user_about_suggestions(conv_key)
+
         except Exception as e:
             logger.error(f"Learning bot error [{self.user_id}]: {e}")
 
@@ -6393,6 +6421,151 @@ class LearningBot:
 
     def clear_unknown(self):
         self.unknown_requests = []
+
+    # ─── قراءة كل المحادثات الفردية لاستخلاص أسلوب الرد ──────────
+
+    async def _read_all_private_style(self, client, limit=100):
+        """
+        يقرأ آخر limit رسالة من كل المحادثات الفردية ليتعلم أسلوب الرد.
+        يُرجع نصاً ملخصاً لأنماط الردود الناجحة.
+        """
+        style_examples = []
+        try:
+            async for dialog in client.iter_dialogs():
+                if not dialog.is_user:
+                    continue
+                entity = dialog.entity
+                chat_id = entity.id
+                pairs = []
+                msgs = []
+                async for msg in client.iter_messages(chat_id, limit=limit):
+                    if msg.text:
+                        role = 'out' if getattr(msg, 'out', False) else 'in'
+                        msgs.insert(0, {'role': role, 'text': msg.text[:300]})
+                for i in range(len(msgs) - 1):
+                    if msgs[i]['role'] == 'in' and msgs[i+1]['role'] == 'out':
+                        pairs.append((msgs[i]['text'], msgs[i+1]['text']))
+                style_examples.extend(pairs[:5])
+                if len(style_examples) >= 30:
+                    break
+        except Exception as e:
+            logger.warning(f"[{self.user_id}] _read_all_private_style error: {e}")
+        return style_examples
+
+    # ─── استخراج أنماط من تاريخ محادثة بعينها ───────────────────
+
+    def _extract_patterns_from_history(self, conv_key):
+        """
+        يستخرج أنماط (نوع + محفز + رد مقترح) من آخر 50 رسالة.
+        """
+        history = self._memory.get("conversations", {}).get(conv_key, [])
+        if len(history) < 2:
+            return []
+        patterns = []
+        for i in range(len(history) - 1):
+            u = history[i]
+            a = history[i + 1]
+            if u.get('role') != 'user' or a.get('role') != 'assistant':
+                continue
+            user_msg   = (u.get('text') or u.get('content') or '').strip()
+            asst_reply = (a.get('text') or a.get('content') or '').strip()
+            if not user_msg or not asst_reply or len(asst_reply) < 5:
+                continue
+            msg_lower = user_msg.lower()
+            if any(w in msg_lower for w in ['السلام', 'هلا', 'مرحبا', 'اهلا', 'صباح', 'مساء']):
+                ptype = 'greeting'
+            elif any(w in msg_lower for w in ['سعر', 'كم', 'تكلفة', 'ثمن', 'بكم']):
+                ptype = 'price_ask'
+            elif any(w in msg_lower for w in ['تقدر', 'تعرف', 'قادر', 'تقدرون']):
+                ptype = 'capability_ask'
+            elif any(w in msg_lower for w in ['واجب', 'بحث', 'ترجمة', 'تلخيص', 'حل', 'تحليل', 'تصميم']):
+                ptype = 'service_request'
+            else:
+                ptype = 'general'
+            patterns.append({
+                'pattern_type': ptype,
+                'trigger': user_msg[:60],
+                'suggested_reply': asst_reply,
+                'frequency': 1,
+            })
+        # دمج المتشابهات
+        merged = {}
+        for p in patterns:
+            key = (p['pattern_type'], p['suggested_reply'][:40])
+            if key not in merged:
+                merged[key] = p.copy()
+            else:
+                merged[key]['frequency'] += 1
+        return sorted(merged.values(), key=lambda x: x['frequency'], reverse=True)[:10]
+
+    def _suggest_new_patterns(self, conv_key):
+        """يُرجع الأنماط الجديدة غير المحفوظة ولم تُرفض من قبل."""
+        existing_replies = set()
+        for data in self._memory.get("patterns", {}).values():
+            for r in data.get("replies", []):
+                existing_replies.add(r[:40])
+        rejected = {
+            r.get('reply', '')[:40]
+            for r in self._memory.get("rejected_suggestions", [])
+        }
+        suggestions = []
+        for p in self._extract_patterns_from_history(conv_key):
+            short = p['suggested_reply'][:40]
+            if short not in existing_replies and short not in rejected:
+                suggestions.append(p)
+        return suggestions[:5]
+
+    def _notify_user_about_suggestions(self, conv_key):
+        """يُرسل إشعار socket للمستخدم إذا وُجدت اقتراحات جديدة."""
+        suggestions = self._suggest_new_patterns(conv_key)
+        if not suggestions:
+            return
+        try:
+            socketio.emit('learning_suggestions', {
+                "conv_key": conv_key,
+                "suggestions": suggestions,
+                "count": len(suggestions)
+            }, to=self.user_id)
+            logger.info(f"[{self.user_id}] أُرسل إشعار تعلم: {len(suggestions)} اقتراح")
+        except Exception as e:
+            logger.error(f"[{self.user_id}] خطأ إشعار التعلم: {e}")
+
+    def save_suggestion(self, index, conv_key):
+        """حفظ اقتراح في قاعدة الأنماط الدائمة."""
+        suggestions = self._suggest_new_patterns(conv_key)
+        if index < 0 or index >= len(suggestions):
+            return False, "رقم الاقتراح غير صحيح"
+        s = suggestions[index]
+        kw = s['pattern_type']
+        patterns = self._memory.setdefault("patterns", {})
+        if kw not in patterns:
+            patterns[kw] = {"replies": [], "count": 0}
+        if s['suggested_reply'] not in patterns[kw]["replies"]:
+            patterns[kw]["replies"].append(s['suggested_reply'])
+            patterns[kw]["replies"] = patterns[kw]["replies"][-10:]
+        patterns[kw]["count"] += 1
+        self._save_memory()
+        self._sync_to_github()
+        return True, f"✅ تم حفظ الاقتراح في قاعدة الأنماط"
+
+    def delete_suggestion(self, index, conv_key):
+        """رفض اقتراح ومنع عرضه مستقبلاً."""
+        suggestions = self._suggest_new_patterns(conv_key)
+        if index < 0 or index >= len(suggestions):
+            return False, "رقم الاقتراح غير صحيح"
+        s = suggestions[index]
+        rejected = self._memory.setdefault("rejected_suggestions", [])
+        rejected.append({
+            "trigger": s['trigger'],
+            "reply": s['suggested_reply'],
+            "rejected_at": datetime.now().isoformat()
+        })
+        self._memory["rejected_suggestions"] = rejected[-100:]
+        self._save_memory()
+        return True, f"🗑️ تم رفض الاقتراح"
+
+    def get_suggestions(self, conv_key):
+        return self._suggest_new_patterns(conv_key)
 
 
 class LearningManager:
@@ -6524,6 +6697,34 @@ def api_learning_clear_unknown():
     bot = learning_manager.get_bot(user_id)
     bot.clear_unknown()
     return jsonify({"success": True, "message": "تم مسح الطلبات"})
+
+@app.route("/api/learning/suggestions", methods=["GET"])
+def api_learning_suggestions():
+    user_id = session.get('user_id', 'user_1')
+    conv_key = request.args.get("conv_key", "")
+    bot = learning_manager.get_bot(user_id)
+    suggestions = bot.get_suggestions(conv_key) if conv_key else []
+    return jsonify({"success": True, "suggestions": suggestions})
+
+@app.route("/api/learning/save_suggestion", methods=["POST"])
+def api_learning_save_suggestion():
+    user_id = session.get('user_id', 'user_1')
+    data = request.json or {}
+    index    = int(data.get("index", -1))
+    conv_key = data.get("conv_key", "")
+    bot = learning_manager.get_bot(user_id)
+    success, msg = bot.save_suggestion(index, conv_key)
+    return jsonify({"success": success, "message": msg})
+
+@app.route("/api/learning/delete_suggestion", methods=["POST"])
+def api_learning_delete_suggestion():
+    user_id = session.get('user_id', 'user_1')
+    data = request.json or {}
+    index    = int(data.get("index", -1))
+    conv_key = data.get("conv_key", "")
+    bot = learning_manager.get_bot(user_id)
+    success, msg = bot.delete_suggestion(index, conv_key)
+    return jsonify({"success": success, "message": msg})
 
 def _normalize_auto_reply(rule):
     if not isinstance(rule, dict):

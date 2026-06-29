@@ -1160,6 +1160,21 @@
             <h6 class="mb-2"><i class="fas fa-list me-2 text-info"></i>الخدمات المسجلة</h6>
             <div id="learningServicesList" class="mb-3"><small class="text-muted">جارِ التحميل...</small></div>
 
+            <!-- ── اقتراحات التعلم الذكي ── -->
+            <hr>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">
+                <i class="fas fa-lightbulb me-2 text-warning"></i>اقتراحات التعلم
+                <span id="suggestionsBadge" class="badge bg-danger ms-1" style="display:none;"></span>
+              </h6>
+              <button class="btn btn-sm btn-outline-warning" id="refreshSuggestionsBtn">
+                <i class="fas fa-sync-alt me-1"></i>تحديث
+              </button>
+            </div>
+            <div id="learningSuggestionsList">
+              <small class="text-muted">تظهر هنا الاقتراحات تلقائياً عند وجود محادثات جديدة</small>
+            </div>
+
             <hr>
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0"><i class="fas fa-question-circle me-2 text-warning"></i>طلبات غير معروفة</h6>
@@ -2247,8 +2262,78 @@
       });
       document.getElementById('learningModal').addEventListener('show.bs.modal', () => {
         loadLearningStatus(); loadLearningServices(); loadLearningUnknown();
+        loadLearningSuggestions();
       });
 
+      // ── اقتراحات التعلم الذكي ──
+      let _currentSuggestionsConvKey = '';
+
+      function renderLearningSuggestions(suggestions, convKey) {
+        const container = document.getElementById('learningSuggestionsList');
+        const badge = document.getElementById('suggestionsBadge');
+        if (!container) return;
+        if (!suggestions || suggestions.length === 0) {
+          container.innerHTML = '<small class="text-muted">لا توجد اقتراحات جديدة</small>';
+          if (badge) badge.style.display = 'none';
+          return;
+        }
+        if (badge) { badge.textContent = suggestions.length; badge.style.display = 'inline-block'; }
+        const typeLabels = { greeting:'تحية', price_ask:'سؤال سعر', capability_ask:'سؤال قدرة', service_request:'طلب خدمة', general:'عام' };
+        container.innerHTML = suggestions.map((s, i) => `
+          <div class="border border-warning rounded p-2 mb-2 bg-dark">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="badge bg-warning text-dark">${typeLabels[s.pattern_type] || s.pattern_type}</span>
+              <span class="badge bg-secondary">${s.frequency || 1} مرة</span>
+            </div>
+            <div class="small text-muted mb-1">📥 المحفز: ${escapeHtml((s.trigger||'').substring(0,60))}</div>
+            <div class="small text-success mb-2">💬 الرد المقترح: ${escapeHtml((s.suggested_reply||'').substring(0,120))}</div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-success btn-sm flex-fill"
+                      onclick="saveSuggestion(${i}, '${escapeHtml(convKey)}')">
+                <i class="fas fa-check me-1"></i>حفظ
+              </button>
+              <button class="btn btn-danger btn-sm flex-fill"
+                      onclick="deleteSuggestion(${i}, '${escapeHtml(convKey)}')">
+                <i class="fas fa-times me-1"></i>رفض
+              </button>
+            </div>
+          </div>`).join('');
+      }
+
+      async function loadLearningSuggestions(convKey) {
+        convKey = convKey || _currentSuggestionsConvKey || '';
+        if (!convKey) return;
+        _currentSuggestionsConvKey = convKey;
+        const r = await apiCall(`/api/learning/suggestions?conv_key=${encodeURIComponent(convKey)}`);
+        if (r.success) renderLearningSuggestions(r.suggestions, convKey);
+      }
+
+      async function saveSuggestion(index, convKey) {
+        const r = await apiCall('/api/learning/save_suggestion', 'POST', { index, conv_key: convKey });
+        showAlert(r.message || '', r.success ? 'success' : 'danger');
+        if (r.success) loadLearningSuggestions(convKey);
+      }
+
+      async function deleteSuggestion(index, convKey) {
+        const r = await apiCall('/api/learning/delete_suggestion', 'POST', { index, conv_key: convKey });
+        showAlert(r.message || '', r.success ? 'success' : 'danger');
+        if (r.success) loadLearningSuggestions(convKey);
+      }
+
+      // زر التحديث اليدوي
+      const refreshSugBtn = document.getElementById('refreshSuggestionsBtn');
+      if (refreshSugBtn) {
+        refreshSugBtn.addEventListener('click', () => {
+          if (!_currentSuggestionsConvKey) {
+            const key = prompt('أدخل conv_key (مثال: sender_id_chat_id):', '');
+            if (key) { _currentSuggestionsConvKey = key; loadLearningSuggestions(key); }
+          } else {
+            loadLearningSuggestions(_currentSuggestionsConvKey);
+          }
+        });
+      }
+
+      // ────────────────────────────────────────────────────
       // ============== 2) النشر الدوري ==============
       function rotUpdateSummary() {
         const v = parseInt(document.getElementById('rotInterval').value || '0');
@@ -4420,6 +4505,43 @@
         if (data.visible) {
           window.open('/admin_panel', '_blank');
         }
+      });
+
+      // ── استقبال اقتراحات التعلم الذكي ──
+      window.socket.on('learning_suggestions', function(data) {
+        var suggestions = data.suggestions || [];
+        var convKey = data.conv_key || '';
+        if (!suggestions.length) return;
+
+        // تحديث المتغير العام لـ conv_key
+        if (typeof _currentSuggestionsConvKey !== 'undefined') {
+          _currentSuggestionsConvKey = convKey;
+        }
+
+        // عرض الاقتراحات في الـ modal إذا كان مفتوحاً
+        var modalEl = document.getElementById('learningModal');
+        if (modalEl && modalEl.classList.contains('show')) {
+          if (typeof renderLearningSuggestions === 'function') {
+            renderLearningSuggestions(suggestions, convKey);
+          }
+        }
+
+        // عرض إشعار منبثق
+        var badge = document.getElementById('suggestionsBadge');
+        if (badge) { badge.textContent = suggestions.length; badge.style.display = 'inline-block'; }
+
+        var toast = document.createElement('div');
+        toast.className = 'alert alert-warning alert-dismissible fade show position-fixed shadow';
+        toast.style.cssText = 'bottom:20px;left:20px;z-index:9999;max-width:340px;font-size:0.92rem;';
+        toast.innerHTML = `
+          <strong><i class="fas fa-lightbulb me-1"></i>اقتراح تعلم جديد</strong><br>
+          البوت تعلم ${suggestions.length} نمط جديد من المحادثات. افتح نظام التعلم الذكي لمراجعتها.
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          <br><button class="btn btn-sm btn-warning mt-1" onclick="var m=new bootstrap.Modal(document.getElementById('learningModal'));m.show();">
+            <i class="fas fa-eye me-1"></i>عرض الاقتراحات
+          </button>`;
+        document.body.appendChild(toast);
+        setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 15000);
       });
     }
 
