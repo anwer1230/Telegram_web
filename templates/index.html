@@ -8929,5 +8929,215 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<!-- ══════════════════════════════════════════════
+     نظام PRO — شارات الوظائف المقيدة + نافذة الفتح
+     ══════════════════════════════════════════════ -->
+<style>
+.pro-wrapper { position:relative; display:block; width:100%; height:100%; }
+.pro-badge {
+    position:absolute; top:6px; right:6px; z-index:10;
+    background: linear-gradient(135deg,#f59e0b,#d97706);
+    color:#000; font-size:0.58rem; font-weight:800;
+    border-radius:4px; padding:2px 6px; letter-spacing:0.5px;
+    box-shadow:0 2px 8px rgba(245,158,11,0.5);
+    pointer-events:none;
+}
+.pro-locked-btn {
+    position:relative;
+    opacity:0.8;
+    cursor:pointer !important;
+}
+.pro-locked-btn::after {
+    content:'';
+    position:absolute; inset:0;
+    background:rgba(245,158,11,0.06);
+    border-radius: inherit;
+    pointer-events:none;
+}
+</style>
+
+<!-- نافذة فتح وظيفة Pro -->
+<div class="modal fade" id="proUnlockModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px;">
+    <div class="modal-content" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);border:1px solid rgba(245,158,11,0.3);border-radius:16px;">
+      <div class="modal-header border-0 pb-0">
+        <div style="display:flex;flex-direction:column;align-items:flex-start;width:100%;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+            <span style="font-size:1.5rem;">🔐</span>
+            <h5 class="modal-title" style="color:#fcd34d;font-weight:700;margin:0;">وظيفة Pro</h5>
+            <span style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;border-radius:4px;padding:2px 8px;font-size:0.65rem;font-weight:800;">PRO</span>
+          </div>
+          <p id="proUnlockFeatureName" style="color:#a5b4fc;font-size:0.82rem;margin:0;"></p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p style="color:#94a3b8;font-size:0.8rem;margin-bottom:14px;">
+          هذه الوظيفة تتطلب بطاقة تفعيل Pro. أدخل كود البطاقة لفتحها دائماً.
+        </p>
+        <div style="position:relative;margin-bottom:12px;">
+          <input type="text" id="proUnlockCode" class="form-control"
+                 placeholder="أدخل كود التفعيل (مثال: ABCDEF-123456)"
+                 style="background:rgba(30,27,75,0.8);border:1px solid rgba(245,158,11,0.4);color:#e2e8f0;border-radius:10px;padding:10px 14px;font-family:'Courier New',monospace;letter-spacing:1px;text-align:center;font-size:0.9rem;"
+                 autocomplete="off">
+        </div>
+        <div id="proUnlockMsg" style="font-size:0.8rem;min-height:24px;text-align:center;padding:4px 0;"></div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-warning btn-sm fw-bold" id="proUnlockBtn" onclick="doUnlockFeature()">
+          <i class="fas fa-unlock me-1"></i>فتح الوظيفة
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════ نظام PRO: شارات + فتح بالبطاقة ══════
+const PRO_FEATURE_MAP = {
+    'learning':   'btnLearningSystem',
+    'rotating':   'btnRotatingSystem',
+    'group_search':'btnSearchMyLinksDropdown',
+    'auto_join':  'btnAutoJoinAdvanced',
+    'auto_replies':'btnAutoReplies',
+    'saved_links': null,
+    'monitoring':  null,
+    'scan_groups': null,
+};
+const PRO_FEATURE_LABELS = {
+    'learning':    'نظام التعلم الذكي',
+    'rotating':    'النشر الدوري المتسلسل',
+    'group_search':'البحث في روابطي',
+    'auto_join':   'الانضمام المتقدم',
+    'auto_replies':'الردود التلقائية',
+    'saved_links': 'الروابط المحفوظة',
+    'monitoring':  'مراقبة المجموعات',
+    'scan_groups': 'مسح المجموعات',
+};
+
+let _proFeatureStatuses = {};
+let _currentProFeature  = null;
+
+async function initProSystem() {
+    try {
+        const r = await fetch('/api/feature_status');
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d.success) return;
+        _proFeatureStatuses = d.features || {};
+        applyProBadges();
+    } catch(e) {}
+}
+
+function applyProBadges() {
+    for (const [feature, btnId] of Object.entries(PRO_FEATURE_MAP)) {
+        if (!btnId) continue;
+        const btn = document.getElementById(btnId);
+        if (!btn) continue;
+        const info = _proFeatureStatuses[feature];
+        if (info && info.restricted) {
+            applyProBadgeToBtn(btn, feature);
+        } else {
+            removeProBadge(btn);
+        }
+    }
+}
+
+function applyProBadgeToBtn(btn, feature) {
+    if (btn._proApplied) return;
+    btn._proApplied = true;
+    btn.classList.add('pro-locked-btn');
+    // إضافة شارة PRO
+    const badge = document.createElement('span');
+    badge.className = 'pro-badge';
+    badge.textContent = 'PRO 🔒';
+    badge.id = 'pro_badge_' + feature;
+    // wrap button in position-relative container
+    const parent = btn.parentElement;
+    if (parent && !parent.classList.contains('pro-wrapper')) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'pro-wrapper';
+        parent.insertBefore(wrapper, btn);
+        wrapper.appendChild(btn);
+        wrapper.appendChild(badge);
+    } else {
+        btn.parentElement.appendChild(badge);
+    }
+    // اعتراض الضغط لإظهار نافذة الفتح
+    btn._origClick = btn.onclick;
+    btn._origBsTarget = btn.getAttribute('data-bs-target');
+    btn._origBsToggle = btn.getAttribute('data-bs-toggle');
+    btn.removeAttribute('data-bs-target');
+    btn.removeAttribute('data-bs-toggle');
+    btn._proHandler = function(e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        openProUnlock(feature);
+    };
+    btn.addEventListener('click', btn._proHandler, true);
+}
+
+function removeProBadge(btn) {
+    if (!btn._proApplied) return;
+    btn._proApplied = false;
+    btn.classList.remove('pro-locked-btn');
+    if (btn._origBsTarget) btn.setAttribute('data-bs-target', btn._origBsTarget);
+    if (btn._origBsToggle) btn.setAttribute('data-bs-toggle', btn._origBsToggle);
+    if (btn._proHandler) btn.removeEventListener('click', btn._proHandler, true);
+    const badge = document.getElementById('pro_badge_' + Object.keys(PRO_FEATURE_MAP).find(k => PRO_FEATURE_MAP[k] === btn.id));
+    if (badge) badge.remove();
+}
+
+function openProUnlock(feature) {
+    _currentProFeature = feature;
+    const labelEl = document.getElementById('proUnlockFeatureName');
+    if (labelEl) labelEl.textContent = PRO_FEATURE_LABELS[feature] || feature;
+    const codeEl = document.getElementById('proUnlockCode');
+    if (codeEl) codeEl.value = '';
+    const msgEl = document.getElementById('proUnlockMsg');
+    if (msgEl) msgEl.innerHTML = '';
+    const modal = new bootstrap.Modal(document.getElementById('proUnlockModal'));
+    modal.show();
+}
+
+async function doUnlockFeature() {
+    const code = (document.getElementById('proUnlockCode')?.value || '').trim();
+    const msgEl = document.getElementById('proUnlockMsg');
+    const btn = document.getElementById('proUnlockBtn');
+    if (!code) { msgEl.innerHTML = '<span style="color:#fca5a5;">❌ أدخل كود التفعيل</span>'; return; }
+    if (!_currentProFeature) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>جاري التحقق...';
+    try {
+        const r = await fetch('/api/unlock_feature', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({feature: _currentProFeature, code})
+        });
+        const d = await r.json();
+        if (d.success) {
+            msgEl.innerHTML = `<span style="color:#6ee7b7;">${d.message}</span>`;
+            // إزالة القيد وإعادة تحميل الحالة
+            setTimeout(async () => {
+                bootstrap.Modal.getInstance(document.getElementById('proUnlockModal'))?.hide();
+                await initProSystem();
+            }, 1200);
+        } else {
+            msgEl.innerHTML = `<span style="color:#fca5a5;">${d.message}</span>`;
+        }
+    } catch(e) {
+        msgEl.innerHTML = '<span style="color:#fca5a5;">❌ خطأ في الاتصال</span>';
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-unlock me-1"></i>فتح الوظيفة';
+}
+
+// تشغيل نظام PRO عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(initProSystem, 1500);
+});
+</script>
 </body>
 </html>
