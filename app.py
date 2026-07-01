@@ -3666,13 +3666,23 @@ def index():
     # ── فحص رابط الدعوة ─────────────────────────────────────────
     invite_token = request.args.get("invite")
     if invite_token:
-        result = validate_invite_token(invite_token)
-        if result == "valid":
-            mark_token_used(invite_token)
+        ok, item, err_msg = validate_invite_token(invite_token)
+        if ok:
+            uid = session.get('user_id', 'unknown')
+            mark_token_used(invite_token, uid)
             session["invite_validated"] = True
             return redirect("/")
         else:
-            return render_template("invite_error.html", reason=result), 403
+            # تحديد سبب الخطأ
+            if "مسبقاً" in (err_msg or ""):
+                reason = "used"
+            elif "صلاحية" in (err_msg or ""):
+                reason = "expired"
+            elif "صحيح" in (err_msg or ""):
+                reason = "not_found"
+            else:
+                reason = "invalid"
+            return render_template("invite_error.html", reason=reason), 403
     # ── فحص نظام البطاقات ──────────────────────────────────────
     try:
         _cdata = load_cards_data()
