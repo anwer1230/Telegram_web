@@ -574,14 +574,18 @@
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <span id="cardSysStatus" style="background:rgba(75,85,99,0.4);color:#9ca3af;border-radius:6px;font-size:0.72rem;padding:3px 10px;">يتحقق...</span>
-                            <button class="btn-sm-act" onclick="toggleCardSys()">
-                                <i class="fas fa-power-off"></i>تبديل
+                            <button id="btnCardEnable" class="btn-sm-green" onclick="setCardSys(true)" style="display:none;">
+                                <i class="fas fa-toggle-on"></i>🟢 تفعيل النظام
                             </button>
-                            <button class="btn-sm-green" onclick="loadCardData()">
+                            <button id="btnCardDisable" class="btn-sm-red" onclick="setCardSys(false)" style="display:none;">
+                                <i class="fas fa-toggle-off"></i>🔴 تعطيل النظام
+                            </button>
+                            <button class="btn-sm-act" onclick="loadCardData()">
                                 <i class="fas fa-sync-alt"></i>تحديث
                             </button>
                         </div>
                     </div>
+                    <div id="cardStatsInfo" style="padding:6px 16px 10px;font-size:0.75rem;color:var(--muted);border-top:1px solid rgba(99,102,241,0.1);"></div>
                 </div>
 
                 <!-- إنشاء كروت -->
@@ -654,6 +658,58 @@
                             <div style="color:var(--muted);text-align:center;padding:24px;">
                                 <i class="fas fa-wifi me-2"></i>لا توجد جلسات نشطة حالياً
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+                <!-- تقييد الوظائف Pro -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <i class="fas fa-lock" style="color:#f59e0b;"></i>
+                            تقييد الوظائف (نظام Pro)
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <span id="frSysStatus" style="background:rgba(75,85,99,0.4);color:#9ca3af;border-radius:6px;font-size:0.72rem;padding:3px 10px;">يتحقق...</span>
+                            <button id="btnFrEnable" class="btn-sm-green" onclick="setFeatureRestrict(true)" style="display:none;">
+                                <i class="fas fa-toggle-on"></i>تفعيل التقييد
+                            </button>
+                            <button id="btnFrDisable" class="btn-sm-red" onclick="setFeatureRestrict(false)" style="display:none;">
+                                <i class="fas fa-toggle-off"></i>تعطيل التقييد
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body" style="padding:14px;">
+                        <p style="color:var(--muted);font-size:0.78rem;margin-bottom:12px;">
+                            حدد الوظائف التي تريد تقييدها — ستظهر بشارة <span style="background:#f59e0b;color:#000;border-radius:4px;padding:1px 6px;font-size:0.7rem;font-weight:700;">PRO</span> وتتطلب بطاقة تفعيل لفتحها.
+                        </p>
+                        <div id="frFeaturesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:14px;">
+                            <div style="color:var(--muted);text-align:center;padding:16px;grid-column:1/-1;"><i class="fas fa-spinner fa-spin me-2"></i>جاري التحميل...</div>
+                        </div>
+                        <button class="btn-sm-green" onclick="saveFrRestrictions()" style="width:100%;">
+                            <i class="fas fa-save"></i>حفظ إعدادات التقييد
+                        </button>
+                    </div>
+                </div>
+
+                <!-- صلاحيات Pro للمستخدمين -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <i class="fas fa-key" style="color:#a78bfa;"></i>
+                            صلاحيات Pro بالمستخدمين
+                        </div>
+                        <button class="btn-sm-act" onclick="loadFvData()">
+                            <i class="fas fa-sync-alt"></i>تحديث
+                        </button>
+                    </div>
+                    <div class="panel-body" style="padding:12px;">
+                        <p style="color:var(--muted);font-size:0.78rem;margin-bottom:12px;">
+                            يمكنك هنا إضافة مستخدمين يمكنهم استخدام وظيفة Pro بدون بطاقة، أو إعادة تعيين صلاحياتهم.
+                        </p>
+                        <div id="fvFeaturesList" style="max-height:340px;overflow-y:auto;">
+                            <div style="color:var(--muted);text-align:center;padding:16px;"><i class="fas fa-spinner fa-spin me-2"></i>جاري التحميل...</div>
                         </div>
                     </div>
                 </div>
@@ -1110,8 +1166,24 @@ async function loadUsers() {
 // ══════════════════════════════════════════════════════════
 //  نظام الكروت
 // ══════════════════════════════════════════════════════════
+function showToast(msg, duration = 3000) {
+    let t = document.getElementById('_adminToast');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = '_adminToast';
+        t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#e2e8f0;border:1px solid rgba(99,102,241,0.4);border-radius:12px;padding:10px 24px;font-size:0.85rem;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.4);transition:opacity 0.3s;';
+        document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.style.opacity = '0', duration);
+}
+
 async function loadCardData() {
     const statusEl = document.getElementById('cardSysStatus');
+    const btnEn = document.getElementById('btnCardEnable');
+    const btnDis = document.getElementById('btnCardDisable');
     statusEl.textContent = 'يتحقق...';
 
     try {
@@ -1119,15 +1191,22 @@ async function loadCardData() {
         const d = await r.json();
         if (d.enabled) {
             statusEl.style.cssText = 'background:rgba(16,185,129,0.2);color:#6ee7b7;border-radius:6px;font-size:0.72rem;padding:3px 10px;';
-            statusEl.textContent = '● مفعّل';
+            statusEl.innerHTML = '<i class="fas fa-check-circle me-1"></i>● نظام الكروت مفعّل';
+            if (btnEn) { btnEn.style.display = 'none'; }
+            if (btnDis) { btnDis.style.display = ''; }
         } else {
             statusEl.style.cssText = 'background:rgba(239,68,68,0.15);color:#fca5a5;border-radius:6px;font-size:0.72rem;padding:3px 10px;';
-            statusEl.textContent = '○ معطّل';
+            statusEl.innerHTML = '<i class="fas fa-times-circle me-1"></i>○ نظام الكروت معطّل';
+            if (btnEn) { btnEn.style.display = ''; }
+            if (btnDis) { btnDis.style.display = 'none'; }
         }
-    } catch(e) { statusEl.textContent = '؟ خطأ'; }
+        if (d.stats) {
+            const si = document.getElementById('cardStatsInfo');
+            if (si) si.textContent = `إجمالي: ${d.stats.total} كرت | متاح: ${d.stats.unused} | جلسات نشطة: ${d.stats.active_sessions}`;
+        }
+    } catch(e) { statusEl.textContent = '؟ خطأ في الاتصال'; }
 
-    await loadVouchers();
-    await loadCardSessions();
+    await Promise.all([loadVouchers(), loadCardSessions(), loadFrData(), loadFvData()]);
 }
 
 async function loadVouchers() {
@@ -1174,12 +1253,138 @@ async function loadCardSessions() {
     }
 }
 
-async function toggleCardSys() {
+async function setCardSys(enabled) {
     try {
-        const r = await fetch('/admin/api/toggle_card_system', {method:'POST', credentials:'same-origin'});
+        const r = await fetch('/admin/api/toggle_card_system', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({enabled})
+        });
         const d = await r.json();
         await loadCardData();
-    } catch(e) {}
+        if (d.success) showToast(d.message || (enabled ? '✅ تم تفعيل نظام الكروت' : '🔴 تم تعطيل نظام الكروت'));
+    } catch(e) { showToast('❌ خطأ في الاتصال'); }
+}
+
+// ── Feature Restrictions ──
+let _frData = {};
+
+async function loadFrData() {
+    try {
+        const r = await fetch('/admin/api/feature_restrictions', {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.success) return;
+        _frData = d;
+        const statusEl = document.getElementById('frSysStatus');
+        const btnEn = document.getElementById('btnFrEnable');
+        const btnDis = document.getElementById('btnFrDisable');
+        if (d.enabled) {
+            statusEl.style.cssText = 'background:rgba(245,158,11,0.2);color:#fcd34d;border-radius:6px;font-size:0.72rem;padding:3px 10px;';
+            statusEl.textContent = '🔒 التقييد مفعّل';
+            btnEn.style.display = 'none'; btnDis.style.display = '';
+        } else {
+            statusEl.style.cssText = 'background:rgba(75,85,99,0.4);color:#9ca3af;border-radius:6px;font-size:0.72rem;padding:3px 10px;';
+            statusEl.textContent = '🔓 التقييد معطّل';
+            btnEn.style.display = ''; btnDis.style.display = 'none';
+        }
+        const features = d.available_features || {};
+        const restricted = d.restricted || [];
+        const el = document.getElementById('frFeaturesList');
+        el.innerHTML = Object.entries(features).map(([key, label]) => `
+            <label style="display:flex;align-items:center;gap:8px;background:rgba(30,40,60,0.6);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:8px 12px;cursor:pointer;">
+                <input type="checkbox" id="fr_${key}" value="${key}" ${restricted.includes(key)?'checked':''} style="width:16px;height:16px;accent-color:#f59e0b;">
+                <span style="font-size:0.82rem;color:#e2e8f0;">${label}</span>
+                <span style="margin-right:auto;background:#f59e0b;color:#000;border-radius:4px;padding:1px 5px;font-size:0.65rem;font-weight:700;opacity:${restricted.includes(key)?'1':'0.3'};">PRO</span>
+            </label>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function setFeatureRestrict(enabled) {
+    try {
+        const restricted = _frData.restricted || [];
+        const r = await fetch('/admin/api/feature_restrictions', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({enabled, restricted})
+        });
+        const d = await r.json();
+        if (d.success) { showToast(d.message); await loadFrData(); }
+    } catch(e) { showToast('❌ خطأ'); }
+}
+
+async function saveFrRestrictions() {
+    const checkboxes = document.querySelectorAll('#frFeaturesList input[type=checkbox]');
+    const restricted = [...checkboxes].filter(c => c.checked).map(c => c.value);
+    const enabled = (document.getElementById('frSysStatus').textContent || '').includes('مفعّل');
+    try {
+        const r = await fetch('/admin/api/feature_restrictions', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({enabled, restricted})
+        });
+        const d = await r.json();
+        showToast(d.success ? d.message : '❌ ' + d.message);
+        if (d.success) await loadFrData();
+    } catch(e) { showToast('❌ خطأ في الاتصال'); }
+}
+
+// ── Feature Vouchers (Pro Users) ──
+async function loadFvData() {
+    try {
+        const r = await fetch('/admin/api/feature_vouchers', {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.success) return;
+        const el = document.getElementById('fvFeaturesList');
+        el.innerHTML = Object.entries(d.features).map(([key, info]) => `
+            <div style="border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:10px 14px;margin-bottom:8px;background:rgba(20,28,50,0.5);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:0.82rem;color:#c4b5fd;font-weight:600;">${info.label}</span>
+                    <span style="background:rgba(99,102,241,0.2);color:#a5b4fc;border-radius:4px;padding:1px 8px;font-size:0.7rem;">${info.user_count} مستخدم</span>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" id="fv_users_${key}" value="${(info.users||[]).join(', ')}"
+                           style="flex:1;background:rgba(30,40,60,0.8);border:1px solid rgba(99,102,241,0.3);border-radius:6px;padding:4px 8px;color:#e2e8f0;font-size:0.75rem;"
+                           placeholder="user_1, user_2, ...">
+                    <button class="btn-sm-green" onclick="saveFvFeature('${key}')" title="حفظ">
+                        <i class="fas fa-save"></i>
+                    </button>
+                    <button class="btn-sm-red" onclick="resetFvFeature('${key}')" title="إعادة تعيين">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function saveFvFeature(key) {
+    const input = document.getElementById(`fv_users_${key}`);
+    const users = input.value.split(',').map(u => u.trim()).filter(Boolean);
+    try {
+        const r = await fetch('/admin/api/feature_vouchers', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({feature: key, users, action:'update'})
+        });
+        const d = await r.json();
+        showToast(d.success ? d.message : '❌ ' + d.message);
+        if (d.success) loadFvData();
+    } catch(e) { showToast('❌ خطأ'); }
+}
+
+async function resetFvFeature(key) {
+    if (!confirm('إعادة تعيين جميع صلاحيات Pro لهذه الوظيفة؟')) return;
+    try {
+        const r = await fetch('/admin/api/feature_vouchers', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({feature: key, action:'reset'})
+        });
+        const d = await r.json();
+        showToast(d.success ? d.message : '❌ ' + d.message);
+        if (d.success) loadFvData();
+    } catch(e) { showToast('❌ خطأ'); }
 }
 
 async function createVouchers() {
