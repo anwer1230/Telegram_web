@@ -8532,18 +8532,8 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 
-    <!-- أيقونة الإدارة (مخفية افتراضياً — تظهر عند استدعائها بكلمة المرور في البحث) -->
-    <div id="adminIconWrapper" style="display:{% if admin_ui_visible %}block{% else %}none{% endif %};position:fixed;bottom:24px;left:24px;z-index:1100;">
-      <button onclick="openAdminPanel()"
-         style="display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
-                color:#fff;padding:10px 18px;border-radius:30px;border:2px solid rgba(255,255,255,0.2);
-                font-size:0.85rem;font-weight:700;cursor:pointer;
-                box-shadow:0 4px 20px rgba(99,102,241,0.5);">
-        <i class="fas fa-shield-alt"></i>
-        <span>الإدارة</span>
-        <span style="background:#ef4444;color:#fff;border-radius:6px;font-size:0.65rem;padding:1px 5px;">🔒</span>
-      </button>
-    </div>
+    <!-- أيقونة الإدارة — مخفية دائماً، الوصول عبر كلمة المرور في خانة البحث فقط -->
+    <div id="adminIconWrapper" style="display:none!important;"></div>
 
 <!-- ══════════════════ مودال: استعراض المجموعات ══════════════════ -->
 <div class="modal fade" id="browseGroupsModal" tabindex="-1" aria-hidden="true">
