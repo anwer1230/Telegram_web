@@ -3,6 +3,54 @@
 ║         مركز سرعة انجاز للخدمات الطلابية والأكاديمية - الإصدار المتكامل       ║
 ║              نظام التليجرام التلقائي + المنصة الأكاديمية المتكاملة            ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     🗺️  خريطة الكود — دليل سريع                           ║
+╠══════════════════════════════════╦═══════════════╦═══════════════════════════╣
+║ القسم / الوظيفة                   ║ السطر (تقريبي)║ الدالة / الفئة الرئيسية   ║
+╠══════════════════════════════════╬═══════════════╬═══════════════════════════╣
+║ الاستيرادات والإعدادات العامة      ║   1 – 110     ║ import / gevent / logging ║
+║ نظام السجلات (Logging/IO)         ║ 110 – 340     ║ _MemoryLogHandler         ║
+║ إعدادات API (TG / Groq / GH)     ║ 340 – 700     ║ API_ID · API_HASH · GROQ  ║
+║ PREDEFINED_USERS / إعدادات تحديث ║ 700 – 960     ║ load_update_settings()    ║
+║ اتصال تيليجرام — Login/Client    ║ 960 – 3150    ║ TelegramClientManager     ║
+║ TelegramManager (المدير العلوي)   ║ 3150 – 3460   ║ TelegramManager           ║
+║ واجهات API للاتصال والتحقق        ║ 3460 – 3860   ║ api_send_code / verify    ║
+║ المراقبة + الإرسال المجدول        ║ 3860 – 5430   ║ monitoring_worker         ║
+║ الانضمام التلقائي للمجموعات        ║ 5430 – 5680   ║ api_auto_join_advanced    ║
+║ البحث العام في تيليجرام            ║ 5680 – 5990   ║ search_global_groups      ║
+║ نظام التعلم الذكي (LearningBot)   ║ 5990 – 6905   ║ LearningBot/Manager       ║
+║ المساعد الذكي AI + GitHub         ║ 6905 – 9340   ║ api_ai_assistant          ║
+║ منشئ العروض PPTX                  ║ 9340 – 10700  ║ _PresentationGenerator    ║
+║ منسق الملفات PDF/DOCX/Excel       ║ 10700 – 11540 ║ api_pdf_to_word           ║
+║ GitHub helpers + روابط محفوظة     ║ 11540 – 11900 ║ upload/download_github    ║
+║ رفع ملفات الأجهزة البيومترية       ║ 11900 – 12100 ║ upload_biometric_file     ║
+║ لوحة الإدارة + نظام البطاقات      ║ 12100 – 13150 ║ admin_dashboard           ║
+║ نظام الإشعارات + Web Push         ║ 13150 – 13400 ║ send_push_notification    ║
+║ مراقبة الروابط + البحث            ║ 13400 – 14150 ║ link_monitor              ║
+║ التحديث التلقائي للكود             ║ 14150 – 14480 ║ check_for_updates()       ║
+║ التعلم التلقائي المتقدم ★ جديد ★   ║ 14480 – 14700 ║ start_auto_learning()     ║
+║ تشغيل الخادم                       ║ آخر سطر       ║ socketio.run()            ║
+╚══════════════════════════════════╩═══════════════╩═══════════════════════════╝
+
+── الخصائص الوظيفية الرئيسية ──────────────────────────────────────────────────
+  ① إرسال رسائل مجدولة/فوري مع صور عبر حسابات تيليجرام متعددة (5 مستخدمين)
+  ② مراقبة الكلمات المفتاحية في المجموعات والإرسال التلقائي
+  ③ بوت تعلم ذكي: يرد بشكل طبيعي باستخدام Groq + ذاكرة دائمة (JSON+GitHub)
+  ④ التحليل التلقائي للمحادثات السابقة واستخلاص أنماط الرد عند تسجيل الدخول
+  ⑤ منشئ عروض PPTX من نص + تحويل PDF/DOCX/Excel
+  ⑥ مساعد ذكي AI يعدّل ملفات المشروع ويدفعها لـ GitHub مباشرةً
+  ⑦ نظام بطاقات تفعيل مع لوحة إدارة كاملة
+  ⑧ إشعارات Web Push + إشعارات ترويجية دورية
+  ⑨ حفظ تلقائي للجلسات على GitHub (backup صامت)
+── الخصائص المساعدة ───────────────────────────────────────────────────────────
+  • load_settings / save_settings     — إعدادات كل مستخدم في JSON
+  • upload_to_github / download_from_github — مزامنة البيانات مع GitHub
+  • save_string_session / load_string_session — إدارة جلسات تيليجرام
+  • load_learned_patterns / save_learned_patterns — أنماط التعلم المستفادة
+  • _apply_learned_patterns           — تطبيق الأنماط قبل Groq
+  • send_push_notification            — Web Push لمستخدم بعينه
+  • load_cards_data / validate_voucher — نظام البطاقات والقسائم
 """
 
 # استخدام OS thread حقيقي — بدون gevent monkey patching لتجنب تعارض asyncio
@@ -24,7 +72,7 @@ import io
 import base64
 import tempfile
 from datetime import datetime, timedelta
-from threading import Lock
+from threading import Lock, Event, Thread
 
 # إضافات التحليل الإحصائي والعروض (اختيارية)
 try:
