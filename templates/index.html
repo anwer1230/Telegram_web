@@ -864,12 +864,6 @@
                         <!-- ─── أدوات إضافية ─── -->
                         <div class="row mt-2">
                             <div class="col-6 mb-2">
-                                <button class="btn btn-outline-secondary w-100 btn-sm"
-                                        data-bs-toggle="modal" data-bs-target="#settingsManageModal">
-                                    <i class="fas fa-database me-1"></i>إدارة الإعدادات
-                                </button>
-                            </div>
-                            <div class="col-6 mb-2">
                                 <button class="btn btn-outline-info w-100 btn-sm" id="ttsBtnToggle"
                                         onclick="toggleTTS()" title="تفعيل/إيقاف النطق الصوتي">
                                     <i class="fas fa-volume-mute"></i>
@@ -8598,44 +8592,6 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- ══════════════════ مودال: إدارة الإعدادات ══════════════════ -->
-<div class="modal fade" id="settingsManageModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title"><i class="fas fa-database me-2"></i>إدارة الإعدادات</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row g-2">
-                    <div class="col-6">
-                        <button class="btn btn-outline-success w-100" onclick="exportSettings()">
-                            <i class="fas fa-file-export me-1"></i>تصدير (JSON)
-                        </button>
-                    </div>
-                    <div class="col-6">
-                        <label class="btn btn-outline-primary w-100 mb-0" for="importFileInput">
-                            <i class="fas fa-file-import me-1"></i>استيراد
-                        </label>
-                        <input type="file" id="importFileInput" accept=".json" style="display:none"
-                               onchange="importSettingsFile(this.files[0]); this.value='';">
-                    </div>
-                    <div class="col-6">
-                        <button class="btn btn-outline-info w-100" onclick="syncSettingsFromServer()">
-                            <i class="fas fa-sync me-1"></i>مزامنة من الخادم
-                        </button>
-                    </div>
-                    <div class="col-6">
-                        <button class="btn btn-outline-warning w-100" onclick="if(confirm('حذف الإعدادات المحلية؟')){localStorage.clear();location.reload();}">
-                            <i class="fas fa-trash me-1"></i>إعادة تعيين
-                        </button>
-                    </div>
-                </div>
-                <p class="small text-muted mt-3 mb-0"><i class="fas fa-info-circle me-1"></i>الإعدادات تُحفظ في الخادم ومزامنة تلقائياً.</p>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -8759,35 +8715,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
-
-// ═══════════════════════════════════════════════════════════════
-//  ④ إدارة الإعدادات (تصدير / استيراد / مزامنة)
-// ═══════════════════════════════════════════════════════════════
-function exportSettings() { window.location.href = '/api/export_settings'; }
-
-async function importSettingsFile(file) {
-    if (!file || !file.name.endsWith('.json')) { alert('❌ الرجاء اختيار ملف JSON'); return; }
-    var fd = new FormData(); fd.append('file', file);
-    try {
-        var r = await fetch('/api/import_settings', {method:'POST', body:fd});
-        var d = await r.json();
-        if (d.success) { alert('✅ تم الاستيراد بنجاح! سيتم إعادة التحميل.'); location.reload(); }
-        else alert('❌ ' + d.message);
-    } catch(e) { alert('❌ ' + e.message); }
-}
-
-async function syncSettingsFromServer() {
-    try {
-        var r = await fetch('/api/load_backup_settings');
-        var d = await r.json();
-        if (d.success && d.settings && Object.keys(d.settings).length) {
-            alert('✅ تم تحديث الإعدادات من الخادم. سيتم إعادة التحميل.');
-            location.reload();
-        } else {
-            alert('ℹ️ لا توجد إعدادات محفوظة على الخادم');
-        }
-    } catch(e) { alert('❌ ' + e.message); }
-}
 
 // ═══════════════════════════════════════════════════════════════
 //  ⑤ إدارة روابط الدعوة
