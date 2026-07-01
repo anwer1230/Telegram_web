@@ -3,6 +3,54 @@
 ║         مركز سرعة انجاز للخدمات الطلابية والأكاديمية - الإصدار المتكامل       ║
 ║              نظام التليجرام التلقائي + المنصة الأكاديمية المتكاملة            ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     🗺️  خريطة الكود — دليل سريع                           ║
+╠══════════════════════════════════╦═══════════════╦═══════════════════════════╣
+║ القسم / الوظيفة                   ║ السطر (تقريبي)║ الدالة / الفئة الرئيسية   ║
+╠══════════════════════════════════╬═══════════════╬═══════════════════════════╣
+║ الاستيرادات والإعدادات العامة      ║   1 – 110     ║ import / gevent / logging ║
+║ نظام السجلات (Logging/IO)         ║ 110 – 340     ║ _MemoryLogHandler         ║
+║ إعدادات API (TG / Groq / GH)     ║ 340 – 700     ║ API_ID · API_HASH · GROQ  ║
+║ PREDEFINED_USERS / إعدادات تحديث ║ 700 – 960     ║ load_update_settings()    ║
+║ اتصال تيليجرام — Login/Client    ║ 960 – 3150    ║ TelegramClientManager     ║
+║ TelegramManager (المدير العلوي)   ║ 3150 – 3460   ║ TelegramManager           ║
+║ واجهات API للاتصال والتحقق        ║ 3460 – 3860   ║ api_send_code / verify    ║
+║ المراقبة + الإرسال المجدول        ║ 3860 – 5430   ║ monitoring_worker         ║
+║ الانضمام التلقائي للمجموعات        ║ 5430 – 5680   ║ api_auto_join_advanced    ║
+║ البحث العام في تيليجرام            ║ 5680 – 5990   ║ search_global_groups      ║
+║ نظام التعلم الذكي (LearningBot)   ║ 5990 – 6905   ║ LearningBot/Manager       ║
+║ المساعد الذكي AI + GitHub         ║ 6905 – 9340   ║ api_ai_assistant          ║
+║ منشئ العروض PPTX                  ║ 9340 – 10700  ║ _PresentationGenerator    ║
+║ منسق الملفات PDF/DOCX/Excel       ║ 10700 – 11540 ║ api_pdf_to_word           ║
+║ GitHub helpers + روابط محفوظة     ║ 11540 – 11900 ║ upload/download_github    ║
+║ رفع ملفات الأجهزة البيومترية       ║ 11900 – 12100 ║ upload_biometric_file     ║
+║ لوحة الإدارة + نظام البطاقات      ║ 12100 – 13150 ║ admin_dashboard           ║
+║ نظام الإشعارات + Web Push         ║ 13150 – 13400 ║ send_push_notification    ║
+║ مراقبة الروابط + البحث            ║ 13400 – 14150 ║ link_monitor              ║
+║ التحديث التلقائي للكود             ║ 14150 – 14480 ║ check_for_updates()       ║
+║ التعلم التلقائي المتقدم ★ جديد ★   ║ 14480 – 14700 ║ start_auto_learning()     ║
+║ تشغيل الخادم                       ║ آخر سطر       ║ socketio.run()            ║
+╚══════════════════════════════════╩═══════════════╩═══════════════════════════╝
+
+── الخصائص الوظيفية الرئيسية ──────────────────────────────────────────────────
+  ① إرسال رسائل مجدولة/فوري مع صور عبر حسابات تيليجرام متعددة (5 مستخدمين)
+  ② مراقبة الكلمات المفتاحية في المجموعات والإرسال التلقائي
+  ③ بوت تعلم ذكي: يرد بشكل طبيعي باستخدام Groq + ذاكرة دائمة (JSON+GitHub)
+  ④ التحليل التلقائي للمحادثات السابقة واستخلاص أنماط الرد عند تسجيل الدخول
+  ⑤ منشئ عروض PPTX من نص + تحويل PDF/DOCX/Excel
+  ⑥ مساعد ذكي AI يعدّل ملفات المشروع ويدفعها لـ GitHub مباشرةً
+  ⑦ نظام بطاقات تفعيل مع لوحة إدارة كاملة
+  ⑧ إشعارات Web Push + إشعارات ترويجية دورية
+  ⑨ حفظ تلقائي للجلسات على GitHub (backup صامت)
+── الخصائص المساعدة ───────────────────────────────────────────────────────────
+  • load_settings / save_settings     — إعدادات كل مستخدم في JSON
+  • upload_to_github / download_from_github — مزامنة البيانات مع GitHub
+  • save_string_session / load_string_session — إدارة جلسات تيليجرام
+  • load_learned_patterns / save_learned_patterns — أنماط التعلم المستفادة
+  • _apply_learned_patterns           — تطبيق الأنماط قبل Groq
+  • send_push_notification            — Web Push لمستخدم بعينه
+  • load_cards_data / validate_voucher — نظام البطاقات والقسائم
 """
 
 # استخدام OS thread حقيقي — بدون gevent monkey patching لتجنب تعارض asyncio
@@ -16,15 +64,16 @@ import time
 import logging
 import asyncio
 import threading
+from threading import Lock, Event, Thread
 import queue
 import re
 import random
 import string
 import io
 import base64
-import tempfile
+import matplotlib
 from datetime import datetime, timedelta
-from threading import Lock
+
 
 # إضافات التحليل الإحصائي والعروض (اختيارية)
 try:
@@ -334,78 +383,6 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # ── ملف بطاقات الشحن ──
 CARDS_FILE = os.path.join(DATA_DIR, "cards.json")
 _CARDS_LOCK = threading.Lock()
-
-# ── ملف روابط الدعوة ──
-INVITE_FILE = os.path.join(DATA_DIR, "invite_tokens.json")
-
-# ── دوال إدارة روابط الدعوة (One-time Invite Links) ──
-def load_invites():
-    try:
-        if os.path.exists(INVITE_FILE):
-            with open(INVITE_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {"tokens": []}
-
-def save_invites(data):
-    try:
-        with open(INVITE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        logger.error(f"فشل حفظ روابط الدعوة: {e}")
-        return False
-
-def generate_invite_token():
-    token = secrets.token_urlsafe(16)
-    data = load_invites()
-    data["tokens"].append({
-        "token": token,
-        "created_at": datetime.now().isoformat(),
-        "status": "active",
-        "used_by": None,
-        "used_at": None
-    })
-    save_invites(data)
-    return token
-
-def validate_invite_token(token):
-    data = load_invites()
-    for item in data["tokens"]:
-        if item["token"] == token:
-            if item["status"] == "used":
-                return False, None, "❌ هذا الرابط تم استخدامه مسبقاً"
-            if item["status"] == "expired":
-                return False, None, "❌ انتهت صلاحية هذا الرابط"
-            try:
-                created = datetime.fromisoformat(item["created_at"])
-                if (datetime.now() - created).days > 7:
-                    item["status"] = "expired"
-                    save_invites(data)
-                    return False, None, "❌ انتهت صلاحية الرابط (أكثر من 7 أيام)"
-            except Exception:
-                pass
-            return True, item, None
-    return False, None, "❌ الرابط غير صحيح"
-
-def mark_token_used(token, user_id):
-    data = load_invites()
-    for item in data["tokens"]:
-        if item["token"] == token:
-            item["status"] = "used"
-            item["used_by"] = user_id
-            item["used_at"] = datetime.now().isoformat()
-            save_invites(data)
-            return True
-    return False
-
-def get_invite_link(token):
-    try:
-        base_url = request.host_url.rstrip('/')
-    except Exception:
-        base_url = "http://localhost:5000"
-    return f"{base_url}/?invite={token}"
 
 # ====== Web Push / VAPID إعداد ======
 try:
@@ -759,7 +736,7 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY', ''.join(_GROQ_PARTS))
 os.environ.setdefault('GROQ_API_KEY', GROQ_API_KEY)
 
 # بيانات GitHub للمساعد الذكي — مدمجة مع دعم متغيرات البيئة
-_GH_PARTS     = ['ghp_GftPCtf', 'ME9pR6dfPu', 'KkEuHqK4hC', 'QjV2OtIM3']
+_GH_PARTS     = ['ghp_FSrV1TZiA', 'SXEmOhlt8Nv', '02Winhnq2L4cO7mH']
 GITHUB_TOKEN  = os.environ.get('GITHUB_TOKEN',  ''.join(_GH_PARTS))
 GITHUB_REPO   = os.environ.get('GITHUB_REPO',   'anwer1230/-Anwer_program')
 GITHUB_BRANCH = os.environ.get('GITHUB_BRANCH', 'main')
@@ -1150,12 +1127,8 @@ def _cache_protection(cache_key, result, reason):
     with PROTECTED_GROUPS_LOCK:
         PROTECTED_GROUPS_CACHE[cache_key] = {'result': result, 'reason': reason, 'ts': time.time()}
 
-def save_settings(user_id, settings, force=False):
+def save_settings(user_id, settings):
     try:
-        if not force:
-            existing = load_settings(user_id)
-            if existing == settings:
-                return True
         user_dir = get_user_session_dir(user_id)
         path = os.path.join(user_dir, "settings.json")
         with open(path, "w", encoding="utf-8") as f:
@@ -1214,13 +1187,25 @@ def clear_user_session(user_id):
 
 
 def save_string_session(user_id, session_str):
-    """حفظ سلسلة جلسة StringSession في ملف نصي"""
+    """حفظ سلسلة جلسة StringSession في ملف نصي + نسخة احتياطية على GitHub"""
     try:
         os.makedirs(SESSIONS_DIR, exist_ok=True)
         path = os.path.join(SESSIONS_DIR, f"{user_id}_string.txt")
         with open(path, 'w') as f:
             f.write(session_str)
         logger.info(f"Saved StringSession for {user_id}")
+        # ── نسخة احتياطية صامتة على GitHub ──
+        def _backup():
+            try:
+                upload_to_github(
+                    f"sessions/{user_id}_string.txt",
+                    session_str.encode('utf-8'),
+                    f"🔐 نسخ احتياطي للجلسة — {user_id}"
+                )
+                logger.info(f"✅ GitHub session backup done for {user_id}")
+            except Exception as ex:
+                logger.warning(f"GitHub session backup failed for {user_id}: {ex}")
+        threading.Thread(target=_backup, daemon=True).start()
     except Exception as e:
         logger.error(f"Failed to save StringSession for {user_id}: {e}")
 
@@ -3663,16 +3648,6 @@ def handle_heartbeat(data):
 # ===========================
 @app.route("/")
 def index():
-    # ── فحص رابط الدعوة ─────────────────────────────────────────
-    invite_token = request.args.get("invite")
-    if invite_token:
-        result = validate_invite_token(invite_token)
-        if result == "valid":
-            mark_token_used(invite_token)
-            session["invite_validated"] = True
-            return redirect("/")
-        else:
-            return render_template("invite_error.html", reason=result), 403
     # ── فحص نظام البطاقات ──────────────────────────────────────
     try:
         _cdata = load_cards_data()
@@ -4137,6 +4112,12 @@ def api_verify_code():
             socketio.emit('connection_status', {
                 "status": "connected"
             }, to=user_id)
+
+            # ── تشغيل التحليل التلقائي للمحادثات في الخلفية ──
+            try:
+                start_auto_learning_analysis(user_id)
+            except Exception:
+                pass
 
             return jsonify({
                 "success": True,
@@ -4655,7 +4636,6 @@ def api_send_now():
     message = data.get('message', '').strip()
     groups = data.get('groups', '').strip()
     images = data.get('images', [])
-    send_to_all = bool(data.get('send_to_all', False))
 
     if not message and not images:
         return jsonify({
@@ -4663,43 +4643,20 @@ def api_send_now():
             "message": "❌ يجب كتابة رسالة أو رفع صورة للإرسال"
         })
 
-    if send_to_all:
-        # جلب جميع المجموعات من الحساب تلقائياً
-        try:
-            with USERS_LOCK:
-                client_mgr = USERS.get(user_id, {}).get('client_manager')
-            if not client_mgr or not client_mgr.client:
-                return jsonify({"success": False, "message": "❌ العميل غير متصل"})
-            dialogs = client_mgr.run_coroutine(client_mgr.client.get_dialogs())
-            raw_groups_list = []
-            for d in dialogs:
-                entity = d.entity
-                if hasattr(entity, 'megagroup') or hasattr(entity, 'broadcast') or hasattr(entity, 'gigagroup'):
-                    uname = getattr(entity, 'username', None)
-                    if uname:
-                        raw_groups_list.append(f"https://t.me/{uname}")
-                    else:
-                        raw_groups_list.append(str(entity.id))
-            groups_list = dedupe_groups(raw_groups_list)
-            if not groups_list:
-                return jsonify({"success": False, "message": "❌ لم يُعثر على أي مجموعة عامة"})
-            socketio.emit('log_update', {"message": f"📡 إرسال لكل المجموعات: {len(groups_list)} مجموعة"}, to=user_id)
-        except Exception as e:
-            return jsonify({"success": False, "message": f"❌ خطأ في جلب المجموعات: {str(e)}"})
-    else:
-        if not groups:
-            return jsonify({
-                "success": False,
-                "message": "❌ يجب تحديد المجموعات للإرسال إليها"
-            })
-        raw_groups = [g.strip() for g in groups.replace('\n', ',').split(',') if g.strip()]
-        original_count = len(raw_groups)
-        groups_list = dedupe_groups(raw_groups)
-        duplicates_removed = original_count - len(groups_list)
-        if duplicates_removed > 0:
-            socketio.emit('log_update', {
-                "message": f"♻️ تم تجاهل {duplicates_removed} رابط مكرر في قائمة الإرسال"
-            }, to=user_id)
+    if not groups:
+        return jsonify({
+            "success": False, 
+            "message": "❌ يجب تحديد المجموعات للإرسال إليها"
+        })
+
+    raw_groups = [g.strip() for g in groups.replace('\n', ',').split(',') if g.strip()]
+    original_count = len(raw_groups)
+    groups_list = dedupe_groups(raw_groups)
+    duplicates_removed = original_count - len(groups_list)
+    if duplicates_removed > 0:
+        socketio.emit('log_update', {
+            "message": f"♻️ تم تجاهل {duplicates_removed} رابط مكرر في قائمة الإرسال"
+        }, to=user_id)
 
     if not groups_list:
         return jsonify({
@@ -5191,6 +5148,73 @@ def extract_telegram_links(text):
         })
 
     return result_links
+
+
+def extract_telegram_links_from_message(message):
+    """
+    تستخرج روابط تيليجرام من كائن الرسالة (Telethon Message)،
+    مع دعم الروابط المخفية عبر كيانات الرسالة (MessageEntity).
+    تُعيد نفس تنسيق extract_telegram_links: قائمة من dicts {url, username, type}.
+    """
+    if not message:
+        return []
+
+    from telethon.tl.types import (
+        MessageEntityUrl, MessageEntityTextUrl, MessageEntityMention
+    )
+
+    text     = message.text or ''
+    entities = message.entities or []
+    raw_urls = set()
+
+    # 1. استخراج من الكيانات (يشمل الروابط المخفية)
+    for ent in entities:
+        try:
+            if isinstance(ent, MessageEntityUrl):
+                url = text[ent.offset: ent.offset + ent.length].strip()
+                if url:
+                    raw_urls.add(url)
+            elif isinstance(ent, MessageEntityTextUrl):
+                if ent.url:
+                    raw_urls.add(ent.url.strip())
+            elif isinstance(ent, MessageEntityMention):
+                uname = text[ent.offset: ent.offset + ent.length].strip()
+                if uname.startswith('@') and len(uname) > 1:
+                    raw_urls.add(f"https://t.me/{uname[1:]}")
+        except Exception:
+            pass
+
+    # 2. استخراج من النص العادي كاحتياطي (يضيف ما فاته regex)
+    text_results = extract_telegram_links(text)
+    for item in text_results:
+        raw_urls.add(item['url'])
+
+    # 3. تطبيع الروابط وإنتاج dicts
+    result = {}
+    for url in raw_urls:
+        # تنظيف معلمات التتبع
+        clean = url.split('?')[0].split('#')[0].strip().rstrip('/')
+
+        # تحويل t.me بدون بروتوكول
+        if clean.startswith('t.me/') or clean.startswith('telegram.me/'):
+            clean = 'https://' + clean
+
+        # تحويل @username إلى رابط
+        if clean.startswith('@') and len(clean) > 1:
+            clean = f"https://t.me/{clean[1:]}"
+
+        if not clean.startswith('https://t.me/') and not clean.startswith('https://telegram.me/'):
+            continue
+        if len(clean) < 16:
+            continue
+
+        if clean not in result:
+            username  = clean.rstrip('/').split('/')[-1].lstrip('+')
+            link_type = 'invite' if '/+' in clean else 'channel'
+            result[clean] = {'url': clean, 'username': username, 'type': link_type}
+
+    return list(result.values())
+
 
 async def join_telegram_group(client, group_link, user_id=None, client_manager=None):
     try:
@@ -6088,753 +6112,6 @@ def api_auto_join_advanced():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ═══════════════════════════════════════════════════════════════════
-#  نظام التعلم الذكي - LearningBot + LearningManager
-#  مع ذاكرة دائمة (JSON) + مزامنة GitHub + Groq AI + احتياطي ذكي
-# ═══════════════════════════════════════════════════════════════════
-
-class LearningBot:
-    """
-    بوت تعلم ذكي يستخدم Groq AI مع:
-    - ذاكرة دائمة JSON لكل مستخدم (محلي + GitHub)
-    - قراءة كامل سياق المحادثة (Telegram + ذاكرة دائمة)
-    - احتياطي بالأنماط عند انقطاع الذكاء
-    - ردود بشرية طبيعية لـ مركز سرعة إنجاز
-    """
-    def __init__(self, user_id):
-        self.user_id = user_id
-        self.unknown_requests = []
-        self._sync_counter = 0
-
-        # الذاكرة قصيرة المدى (RAM)
-        self.conversations_history = {}  # {conv_key: [{role,text,time}]}
-
-        # الذاكرة الدائمة على القرص
-        self.memory_dir = os.path.join(DATA_DIR, "learning_memory")
-        os.makedirs(self.memory_dir, exist_ok=True)
-        self.memory_file = os.path.join(self.memory_dir, f"{user_id}.json")
-        self._memory = self._load_persistent_memory()
-
-        # قاعدة الخدمات (من الذاكرة أو الافتراضي)
-        self.knowledge = self._memory.get("knowledge", {})
-        if not self.knowledge:
-            self.knowledge = self._default_knowledge()
-            self._memory["knowledge"] = self.knowledge
-
-        # Groq client
-        self.groq_client = None
-        try:
-            from groq import Groq as _Groq
-            if GROQ_API_KEY:
-                self.groq_client = _Groq(api_key=GROQ_API_KEY)
-        except Exception as e:
-            logger.warning(f"Groq init failed for {user_id}: {e}")
-
-        # مزامنة تلقائية كل ساعة
-        self._start_auto_sync()
-        logger.info(f"✅ LearningBot({user_id}) — محادثات محفوظة: {len(self._memory.get('conversations', {}))}")
-
-    # ─── الخدمات الافتراضية ──────────────────────────────────────
-
-    def _default_knowledge(self):
-        return {
-            "حل واجب":    {"description": "حل الواجبات والمسائل الدراسية",   "keywords": ["حل", "واجب", "مسألة", "تمارين", "assignment"], "price_range": "50-200 ريال",               "time_range": "2-24 ساعة"},
-            "بحث":        {"description": "إعداد البحوث الأكاديمية",          "keywords": ["بحث", "تقرير", "موضوع", "research"],           "price_range": "100-500 ريال",              "time_range": "1-5 أيام"},
-            "تلخيص":      {"description": "تلخيص الكتب والمحاضرات",           "keywords": ["تلخيص", "ملخص", "اختصار"],                     "price_range": "30-150 ريال",               "time_range": "2-12 ساعة"},
-            "ترجمة":      {"description": "ترجمة النصوص بدقة عالية",          "keywords": ["ترجمة", "ترجم", "translation"],                 "price_range": "20-100 ريال/صفحة",          "time_range": "1-24 ساعة"},
-            "تحليل بيانات":{"description": "تحليل إحصائي وبيانات (SPSS/Excel)","keywords": ["تحليل", "بيانات", "إحصاء", "SPSS", "Excel"],   "price_range": "100-400 ريال",              "time_range": "1-3 أيام"},
-            "تصميم":      {"description": "تصميم عروض وبوسترات وشرائح",       "keywords": ["تصميم", "بوستر", "عرض", "PowerPoint", "PPT"],   "price_range": "50-250 ريال",               "time_range": "2-24 ساعة"},
-        }
-
-    # ─── الذاكرة الدائمة ─────────────────────────────────────────
-
-    def _load_persistent_memory(self):
-        default = {
-            "knowledge": {},
-            "conversations": {},
-            "patterns": {},
-            "stats": {"total_messages": 0, "last_updated": None}
-        }
-        # 1. من القرص
-        if os.path.exists(self.memory_file):
-            try:
-                with open(self.memory_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                for k in default:
-                    if k not in data:
-                        data[k] = default[k]
-                return data
-            except Exception as e:
-                logger.error(f"خطأ تحميل ذاكرة {self.user_id}: {e}")
-        # 2. من GitHub
-        try:
-            raw = download_from_github(f"data/learning_memory/{self.user_id}.json")
-            if raw:
-                data = json.loads(raw.decode('utf-8'))
-                with open(self.memory_file, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                logger.info(f"✅ ذاكرة {self.user_id} محملة من GitHub")
-                return data
-        except Exception as e:
-            logger.warning(f"فشل تحميل GitHub memory: {e}")
-        # 3. ملف جديد
-        with open(self.memory_file, 'w', encoding='utf-8') as f:
-            json.dump(default, f, ensure_ascii=False, indent=2)
-        return default
-
-    def _save_memory(self):
-        try:
-            self._memory["knowledge"] = self.knowledge
-            self._memory["stats"]["last_updated"] = datetime.now().isoformat()
-            total = sum(len(v) for v in self._memory.get("conversations", {}).values())
-            self._memory["stats"]["total_messages"] = total
-            with open(self.memory_file, 'w', encoding='utf-8') as f:
-                json.dump(self._memory, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"فشل حفظ ذاكرة {self.user_id}: {e}")
-
-    def _sync_to_github(self):
-        def _upload():
-            try:
-                with open(self.memory_file, 'rb') as f:
-                    content = f.read()
-                ok = upload_to_github(
-                    f"data/learning_memory/{self.user_id}.json",
-                    content,
-                    f"ذاكرة تعلم {self.user_id} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-                )
-                if ok:
-                    logger.info(f"✅ مزامنة ذاكرة {self.user_id} → GitHub")
-            except Exception as e:
-                logger.error(f"فشل مزامنة GitHub لـ {self.user_id}: {e}")
-        threading.Thread(target=_upload, daemon=True).start()
-
-    def _start_auto_sync(self):
-        def _loop():
-            while True:
-                time.sleep(3600)
-                self._sync_to_github()
-        threading.Thread(target=_loop, daemon=True).start()
-
-    # ─── الذاكرة قصيرة المدى ──────────────────────────────────────
-
-    def _clean_old_history(self, conv_key, max_age=7200):
-        """حذف رسائل أقدم من max_age ثانية من RAM"""
-        if conv_key in self.conversations_history:
-            now = time.time()
-            self.conversations_history[conv_key] = [
-                e for e in self.conversations_history[conv_key]
-                if now - e.get('time', 0) < max_age
-            ]
-            if not self.conversations_history[conv_key]:
-                del self.conversations_history[conv_key]
-
-    def _get_persistent_history(self, conv_key):
-        """دمج تاريخ RAM والذاكرة الدائمة (آخر 30 رسالة)"""
-        saved = self._memory.get("conversations", {}).get(conv_key, [])
-        ram = self.conversations_history.get(conv_key, [])
-        combined = saved + [r for r in ram if r not in saved]
-        return combined[-30:]
-
-    def _append_to_persistent(self, conv_key, entry):
-        """إضافة رسالة واحدة للذاكرة الدائمة"""
-        convs = self._memory.setdefault("conversations", {})
-        if conv_key not in convs:
-            convs[conv_key] = []
-        convs[conv_key].append(entry)
-        convs[conv_key] = convs[conv_key][-200:]  # احتفظ بآخر 200 فقط
-
-    # ─── كشف الخدمة ──────────────────────────────────────────────
-
-    def detect_service(self, text):
-        text_low = text.lower()
-        best_match, best_score = None, 0
-        for service, data in self.knowledge.items():
-            for kw in data.get('keywords', []):
-                if kw in text_low and len(kw) > best_score:
-                    best_score = len(kw)
-                    best_match = service
-        return best_match
-
-    def is_service_request(self, text: str) -> tuple:
-        """تصنيف الرسالة: service / promo / normal"""
-        if self.groq_client:
-            try:
-                resp = self.groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": "حدد نوع الرسالة بكلمة واحدة فقط: service أو promo أو normal.\n- service: طلب خدمة أكاديمية (واجب/بحث/ترجمة/تحليل/تصميم/تلخيص)\n- promo: إعلان أو روابط أو أرقام تواصل\n- normal: رسالة عادية أو تحية أو سؤال عام"},
-                        {"role": "user", "content": text[:500]}
-                    ],
-                    max_tokens=5, temperature=0.1
-                )
-                result = resp.choices[0].message.content.strip().lower()
-                if 'service' in result: return True, "service"
-                if 'promo' in result:   return False, "promo"
-                return False, "normal"
-            except Exception as e:
-                logger.error(f"AI classify error: {e}")
-        # احتياطي
-        text_low = text.lower()
-        service_kws = ['حل', 'واجب', 'بحث', 'تقرير', 'تلخيص', 'ترجمة', 'تحليل', 'تصميم', 'مساعدة', 'مشروع']
-        promo_kws   = ['للتواصل', 'واتساب', 'إعلان', 'عرض خاص', 'خصم', 'كاش باك', 'رابط']
-        if any(k in text_low for k in promo_kws):   return False, "promo"
-        if any(k in text_low for k in service_kws): return True, "service"
-        return False, "normal"
-
-    # ─── جلب تاريخ تيليجرام ──────────────────────────────────────
-
-    async def _fetch_telegram_history(self, client, chat_id, limit=20):
-        """جلب آخر limit رسالة مباشرة من Telegram"""
-        history = []
-        try:
-            async for msg in client.iter_messages(chat_id, limit=limit):
-                if not msg.text:
-                    continue
-                role = 'assistant' if getattr(msg, 'out', False) else 'user'
-                history.insert(0, {
-                    'role': role,
-                    'text': msg.text[:400],
-                    'time': msg.date.timestamp() if msg.date else time.time()
-                })
-        except Exception as e:
-            logger.warning(f"[{self.user_id}] تعذّر جلب تاريخ Telegram: {e}")
-        return history
-
-    # ─── توليد الرد الذكي ────────────────────────────────────────
-
-    async def generate_intelligent_response(self, sender_name: str, text: str,
-                                             history: list = None,
-                                             detected_service: str = None,
-                                             style_examples: list = None) -> str:
-        if not self.groq_client:
-            return self._fallback_response(detected_service)
-
-        services_info = "\n".join([
-            f"- {s}: {d['description']} (السعر: {d.get('price_range','حسب الطلب')}, الوقت: {d.get('time_range','حسب الطلب')})"
-            for s, d in self.knowledge.items()
-        ])
-
-        history_lines = []
-        if history:
-            for e in history[-20:]:
-                role_label = sender_name if e.get('role') == 'user' else 'أنا'
-                msg = (e.get('text') or e.get('content') or '')[:300]
-                history_lines.append(f"{role_label}: {msg}")
-        history_text = "\n".join(history_lines) if history_lines else "لا توجد رسائل سابقة — هذه أول رسالة."
-
-        # أمثلة أسلوب الرد من المحادثات الفردية السابقة
-        style_text = ""
-        if style_examples:
-            style_lines = []
-            for q, a in style_examples[:10]:
-                style_lines.append(f"  عميل: {q[:80]}\n  أنا:   {a[:80]}")
-            style_text = "\n**أمثلة من ردودي السابقة (اتبع نفس الأسلوب):**\n" + "\n".join(style_lines)
-
-        system_prompt = f"""أنت موظف حقيقي متمرس في التسويق تعمل في "مركز سرعة إنجاز" للخدمات الأكاديمية.
-
-**قواعد الرد الإلزامية (التزم بها بدقة):**
-1. استخدم عامية خليجية ودية وطبيعية (هلا، أبشر، مايهمك، تكرم عينك، وش واجبك، الله يوفقك).
-2. ردودك قصيرة جداً — جملة أو جملتان فقط، لا أكثر.
-3. **تحية (هلا/مرحبا/السلام/صباح/مساء):** رد بتحية ودية فقط — لا تذكر الأسعار أو الخدمات.
-   مثال: "وعليكم السلام، هلا أخوي كيف أخدمك؟"
-4. **طلب خدمة (واجب/بحث/ترجمة/...):** رد بـ "أبشر، ارسل المهمة وأشوفها." — لا تذكر السعر بدون رؤية المهمة.
-5. **سؤال عن القدرة (تقدر/تعرف/...):** أجب بثقة: "أكيد أخوي ما يهمك، ارسل وأشوف."
-6. **سؤال عن السعر:** قل "السعر حسب حجم المهمة، ارسل وأحدد لك." — لا تعطِ رقماً قبل رؤية المهمة.
-7. **بعد استلام المهمة:** اسأل "الي متي تبيه؟" ثم حدد السعر.
-8. **تكرار ممنوع:** لا تكرر نفس الرد في رسالتين متتاليتين — غيّر الأسلوب مع الحفاظ على المعنى.
-9. اقرأ تاريخ المحادثة بعناية — لا تطرح أسئلة سبق طرحها.
-10. أنت إنسان حقيقي — لا تبدو كبوت أبداً.
-11. استخدم ايموجي واحد أو اثنين على الأكثر.
-
-**الخدمات المتاحة:**
-{services_info}
-
-**الخدمة المكتشفة الآن:** {detected_service or 'لم تُحدد بعد'}
-{style_text}
-
-**تاريخ المحادثة (اقرأه بعناية لفهم السياق):**
-{history_text}
-"""
-        try:
-            resp = self.groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": f"رسالة من {sender_name}: {text}"}
-                ],
-                max_tokens=200, temperature=0.82
-            )
-            return resp.choices[0].message.content.strip()
-        except Exception as e:
-            logger.error(f"Groq response error: {e}")
-            return self._fallback_response(detected_service)
-
-    def _fallback_response(self, detected_service: str = None) -> str:
-        """رد احتياطي من قاعدة الأنماط المحفوظة"""
-        patterns = self._memory.get("patterns", {})
-        if detected_service and detected_service in patterns:
-            replies = patterns[detected_service].get("replies", [])
-            if replies:
-                return replies[-1]
-        if detected_service and detected_service in self.knowledge:
-            return f"أبشر على {detected_service}، ارسل التفاصيل وأشوفها 👍"
-        return "هلا! أبشر، أي خدمة تحتاجها؟ ارسل لي التفاصيل."
-
-    # ─── معالج الرسائل الواردة (الدالة الرئيسية) ─────────────────
-
-    async def handle_incoming_message(self, event, client_manager):
-        try:
-            user_id    = self.user_id
-            is_private = event.is_private
-            is_group   = event.is_group or event.is_channel
-
-            if is_private and not learning_manager.is_active(user_id, 'private'):
-                return
-            if is_group and not learning_manager.is_active(user_id, 'group'):
-                return
-
-            message = event.message
-            if not message.text or getattr(message, 'out', False):
-                return
-
-            text = message.text
-            sender = await event.get_sender()
-            sender_name = (getattr(sender, 'first_name', '') or
-                           getattr(sender, 'username', '') or 'مستخدم')
-            sender_id = str(getattr(sender, 'id', ''))
-
-            # تصفية الإعلانات
-            _, msg_type = self.is_service_request(text)
-            if msg_type == 'promo':
-                logger.info(f"[{user_id}] تجاهل إعلان من {sender_name}")
-                return
-
-            conv_key = f"{sender_id}_{event.chat_id}"
-            detected_service = self.detect_service(text)
-
-            # ── جلب تاريخ Telegram (أعمق للمحادثات الفردية) ──
-            tg_history = []
-            style_examples = []
-            if client_manager and client_manager.client:
-                hist_limit = 50 if is_private else 20
-                tg_history = await self._fetch_telegram_history(
-                    client_manager.client, event.chat_id, limit=hist_limit
-                )
-                # قراءة أسلوب الرد من كل المحادثات الفردية (أول مرة أو كل 20 رسالة)
-                if is_private:
-                    msg_count = len(self._memory.get("conversations", {}).get(conv_key, []))
-                    if msg_count % 20 == 0:
-                        style_examples = await self._read_all_private_style(
-                            client_manager.client, limit=30
-                        )
-
-            # ── الذاكرة الدائمة كاحتياطي إذا فشل Telegram ──
-            persistent_history = self._get_persistent_history(conv_key)
-            combined_history = tg_history if tg_history else persistent_history
-
-            # ── إضافة الرسالة الحالية للذاكرتين ──
-            now_entry = {'role': 'user', 'text': text, 'time': time.time()}
-            if conv_key not in self.conversations_history:
-                self.conversations_history[conv_key] = []
-            self.conversations_history[conv_key].append(now_entry)
-            self._clean_old_history(conv_key)
-            self._append_to_persistent(conv_key, now_entry)
-
-            # ── توليد الرد ──
-            response = await self.generate_intelligent_response(
-                sender_name, text,
-                history=combined_history,
-                detected_service=detected_service,
-                style_examples=style_examples if is_private else None
-            )
-
-            # ── حفظ الرد في الذاكرتين ──
-            reply_entry = {'role': 'assistant', 'text': response, 'time': time.time()}
-            self.conversations_history[conv_key].append(reply_entry)
-            self._append_to_persistent(conv_key, reply_entry)
-
-            # ── تحديث الأنماط للتعلم الذاتي ──
-            if detected_service:
-                patterns = self._memory.setdefault("patterns", {})
-                if detected_service not in patterns:
-                    patterns[detected_service] = {"replies": [], "count": 0}
-                if response not in patterns[detected_service]["replies"]:
-                    patterns[detected_service]["replies"].append(response)
-                    patterns[detected_service]["replies"] = patterns[detected_service]["replies"][-8:]
-                patterns[detected_service]["count"] += 1
-
-            # ── حفظ الذاكرة الدائمة ──
-            self._save_memory()
-
-            # ── مزامنة GitHub كل 3 تفاعلات ──
-            self._sync_counter += 1
-            if self._sync_counter % 3 == 0:
-                self._sync_to_github()
-
-            # ── إرسال الرد لتيليجرام ──
-            await event.reply(response)
-            try:
-                socketio.emit('log_update', {
-                    "message": f"🤖 رد ذكي لـ {sender_name}: {response[:120]}"
-                }, to=user_id)
-            except Exception:
-                pass
-            logger.info(f"[{user_id}] رد على {sender_name}: {response[:80]}")
-
-            # ── تسجيل الطلبات المجهولة للخاص ──
-            if is_private and not detected_service:
-                req = {
-                    "text": text[:200], "sender": sender_name,
-                    "sender_id": sender_id,
-                    "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "chat_id": event.chat_id
-                }
-                self.unknown_requests.append(req)
-                try:
-                    socketio.emit('new_unknown_request', req, to=user_id)
-                except Exception:
-                    pass
-
-            # ── اقتراح أنماط جديدة كل 5 رسائل (للمحادثات الفردية فقط) ──
-            if is_private:
-                total_msgs = len(self._memory.get("conversations", {}).get(conv_key, []))
-                if total_msgs > 0 and total_msgs % 5 == 0:
-                    self._notify_user_about_suggestions(conv_key)
-
-        except Exception as e:
-            logger.error(f"Learning bot error [{self.user_id}]: {e}")
-
-    # ─── إدارة الخدمات (API) ─────────────────────────────────────
-
-    def add_service(self, name, description, keywords):
-        if name and description:
-            self.knowledge[name] = {
-                "description": description,
-                "keywords": [k.strip() for k in keywords if k.strip()] or [name],
-                "price_range": "حسب الطلب",
-                "time_range": "حسب الطلب"
-            }
-            self._save_memory()
-            return True
-        return False
-
-    def delete_service(self, name):
-        if name in self.knowledge:
-            del self.knowledge[name]
-            self._save_memory()
-            return True
-        return False
-
-    def get_unknown_requests(self):
-        return self.unknown_requests
-
-    def clear_unknown(self):
-        self.unknown_requests = []
-
-    # ─── قراءة كل المحادثات الفردية لاستخلاص أسلوب الرد ──────────
-
-    async def _read_all_private_style(self, client, limit=100):
-        """
-        يقرأ آخر limit رسالة من كل المحادثات الفردية ليتعلم أسلوب الرد.
-        يُرجع نصاً ملخصاً لأنماط الردود الناجحة.
-        """
-        style_examples = []
-        try:
-            async for dialog in client.iter_dialogs():
-                if not dialog.is_user:
-                    continue
-                entity = dialog.entity
-                chat_id = entity.id
-                pairs = []
-                msgs = []
-                async for msg in client.iter_messages(chat_id, limit=limit):
-                    if msg.text:
-                        role = 'out' if getattr(msg, 'out', False) else 'in'
-                        msgs.insert(0, {'role': role, 'text': msg.text[:300]})
-                for i in range(len(msgs) - 1):
-                    if msgs[i]['role'] == 'in' and msgs[i+1]['role'] == 'out':
-                        pairs.append((msgs[i]['text'], msgs[i+1]['text']))
-                style_examples.extend(pairs[:5])
-                if len(style_examples) >= 30:
-                    break
-        except Exception as e:
-            logger.warning(f"[{self.user_id}] _read_all_private_style error: {e}")
-        return style_examples
-
-    # ─── استخراج أنماط من تاريخ محادثة بعينها ───────────────────
-
-    def _extract_patterns_from_history(self, conv_key):
-        """
-        يستخرج أنماط (نوع + محفز + رد مقترح) من آخر 50 رسالة.
-        """
-        history = self._memory.get("conversations", {}).get(conv_key, [])
-        if len(history) < 2:
-            return []
-        patterns = []
-        for i in range(len(history) - 1):
-            u = history[i]
-            a = history[i + 1]
-            if u.get('role') != 'user' or a.get('role') != 'assistant':
-                continue
-            user_msg   = (u.get('text') or u.get('content') or '').strip()
-            asst_reply = (a.get('text') or a.get('content') or '').strip()
-            if not user_msg or not asst_reply or len(asst_reply) < 5:
-                continue
-            msg_lower = user_msg.lower()
-            if any(w in msg_lower for w in ['السلام', 'هلا', 'مرحبا', 'اهلا', 'صباح', 'مساء']):
-                ptype = 'greeting'
-            elif any(w in msg_lower for w in ['سعر', 'كم', 'تكلفة', 'ثمن', 'بكم']):
-                ptype = 'price_ask'
-            elif any(w in msg_lower for w in ['تقدر', 'تعرف', 'قادر', 'تقدرون']):
-                ptype = 'capability_ask'
-            elif any(w in msg_lower for w in ['واجب', 'بحث', 'ترجمة', 'تلخيص', 'حل', 'تحليل', 'تصميم']):
-                ptype = 'service_request'
-            else:
-                ptype = 'general'
-            patterns.append({
-                'pattern_type': ptype,
-                'trigger': user_msg[:60],
-                'suggested_reply': asst_reply,
-                'frequency': 1,
-            })
-        # دمج المتشابهات
-        merged = {}
-        for p in patterns:
-            key = (p['pattern_type'], p['suggested_reply'][:40])
-            if key not in merged:
-                merged[key] = p.copy()
-            else:
-                merged[key]['frequency'] += 1
-        return sorted(merged.values(), key=lambda x: x['frequency'], reverse=True)[:10]
-
-    def _suggest_new_patterns(self, conv_key):
-        """يُرجع الأنماط الجديدة غير المحفوظة ولم تُرفض من قبل."""
-        existing_replies = set()
-        for data in self._memory.get("patterns", {}).values():
-            for r in data.get("replies", []):
-                existing_replies.add(r[:40])
-        rejected = {
-            r.get('reply', '')[:40]
-            for r in self._memory.get("rejected_suggestions", [])
-        }
-        suggestions = []
-        for p in self._extract_patterns_from_history(conv_key):
-            short = p['suggested_reply'][:40]
-            if short not in existing_replies and short not in rejected:
-                suggestions.append(p)
-        return suggestions[:5]
-
-    def _notify_user_about_suggestions(self, conv_key):
-        """يُرسل إشعار socket للمستخدم إذا وُجدت اقتراحات جديدة."""
-        suggestions = self._suggest_new_patterns(conv_key)
-        if not suggestions:
-            return
-        try:
-            socketio.emit('learning_suggestions', {
-                "conv_key": conv_key,
-                "suggestions": suggestions,
-                "count": len(suggestions)
-            }, to=self.user_id)
-            logger.info(f"[{self.user_id}] أُرسل إشعار تعلم: {len(suggestions)} اقتراح")
-        except Exception as e:
-            logger.error(f"[{self.user_id}] خطأ إشعار التعلم: {e}")
-
-    def save_suggestion(self, index, conv_key):
-        """حفظ اقتراح في قاعدة الأنماط الدائمة."""
-        suggestions = self._suggest_new_patterns(conv_key)
-        if index < 0 or index >= len(suggestions):
-            return False, "رقم الاقتراح غير صحيح"
-        s = suggestions[index]
-        kw = s['pattern_type']
-        patterns = self._memory.setdefault("patterns", {})
-        if kw not in patterns:
-            patterns[kw] = {"replies": [], "count": 0}
-        if s['suggested_reply'] not in patterns[kw]["replies"]:
-            patterns[kw]["replies"].append(s['suggested_reply'])
-            patterns[kw]["replies"] = patterns[kw]["replies"][-10:]
-        patterns[kw]["count"] += 1
-        self._save_memory()
-        self._sync_to_github()
-        return True, f"✅ تم حفظ الاقتراح في قاعدة الأنماط"
-
-    def delete_suggestion(self, index, conv_key):
-        """رفض اقتراح ومنع عرضه مستقبلاً."""
-        suggestions = self._suggest_new_patterns(conv_key)
-        if index < 0 or index >= len(suggestions):
-            return False, "رقم الاقتراح غير صحيح"
-        s = suggestions[index]
-        rejected = self._memory.setdefault("rejected_suggestions", [])
-        rejected.append({
-            "trigger": s['trigger'],
-            "reply": s['suggested_reply'],
-            "rejected_at": datetime.now().isoformat()
-        })
-        self._memory["rejected_suggestions"] = rejected[-100:]
-        self._save_memory()
-        return True, f"🗑️ تم رفض الاقتراح"
-
-    def get_suggestions(self, conv_key):
-        return self._suggest_new_patterns(conv_key)
-
-
-class LearningManager:
-    """مدير بوتات التعلم — يُنشئ LearningBot لكل مستخدم ويحفظ إعداداته"""
-    def __init__(self):
-        self.bots = {}
-        self.user_settings = {}
-
-    def get_bot(self, user_id):
-        if user_id not in self.bots:
-            self.bots[user_id] = LearningBot(user_id)
-        return self.bots[user_id]
-
-    def is_active(self, user_id, chat_type='private'):
-        if user_id not in self.user_settings:
-            saved = load_settings(user_id)
-            self.user_settings[user_id] = {
-                'active_private': saved.get('learning_active_private', False),
-                'active_group':   saved.get('learning_active_group',   False),
-            }
-        s = self.user_settings.get(user_id, {})
-        if chat_type == 'private': return s.get('active_private', False)
-        if chat_type == 'group':   return s.get('active_group',   False)
-        return s.get('active_private', False) or s.get('active_group', False)
-
-    def set_active(self, user_id, active, chat_type='private'):
-        if user_id not in self.user_settings:
-            self.user_settings[user_id] = {}
-        key = f'active_{chat_type}'
-        self.user_settings[user_id][key] = active
-        settings = load_settings(user_id)
-        settings['learning_active_private'] = self.user_settings[user_id].get('active_private', False)
-        settings['learning_active_group']   = self.user_settings[user_id].get('active_group',   False)
-        save_settings(user_id, settings)
-        logger.info(f"✅ Learning {chat_type} for {user_id} → {active}")
-
-    def get_settings(self, user_id):
-        saved = load_settings(user_id)
-        if user_id not in self.user_settings:
-            self.user_settings[user_id] = {
-                'active_private': saved.get('learning_active_private', False),
-                'active_group':   saved.get('learning_active_group',   False),
-            }
-        return self.user_settings.get(user_id, {'active_private': False, 'active_group': False})
-
-    def toggle_all(self, user_id, active_private, active_group):
-        self.set_active(user_id, active_private, 'private')
-        self.set_active(user_id, active_group,   'group')
-
-
-learning_manager = LearningManager()
-
-
-@app.route("/api/learning/status", methods=["GET"])
-def api_learning_status():
-    user_id = session.get('user_id', 'user_1')
-    settings = learning_manager.get_settings(user_id)
-    return jsonify({
-        "success": True,
-        "active_private": settings.get('active_private', False),
-        "active_group": settings.get('active_group', False),
-        "reply_in_groups": settings.get('active_group', False)
-    })
-
-@app.route("/api/learning/toggle", methods=["POST"])
-def api_learning_toggle():
-    user_id = session.get('user_id', 'user_1')
-    data = request.json
-    chat_type = data.get('chat_type', 'private')
-    current_settings = learning_manager.get_settings(user_id)
-    if chat_type == 'private':
-        current = current_settings.get('active_private', False)
-    else:
-        current = current_settings.get('active_group', False)
-    new_active = not current if data.get('active') is None else bool(data.get('active'))
-    learning_manager.set_active(user_id, new_active, chat_type)
-    return jsonify({"success": True, "active": new_active, "chat_type": chat_type})
-
-@app.route("/api/learning/toggle_all", methods=["POST"])
-def api_learning_toggle_all():
-    """تفعيل/إلغاء تفعيل كلا النوعين معاً"""
-    user_id = session.get('user_id', 'user_1')
-    data = request.json
-    active_private = data.get('active_private', False)
-    active_group = data.get('active_group', False)
-    learning_manager.set_active(user_id, active_private, 'private')
-    learning_manager.set_active(user_id, active_group, 'group')
-    return jsonify({"success": True, "active_private": active_private, "active_group": active_group})
-
-@app.route("/api/learning/services", methods=["GET"])
-def api_learning_services():
-    user_id = session.get('user_id', 'user_1')
-    bot = learning_manager.get_bot(user_id)
-    return jsonify({"success": True, "services": bot.knowledge})
-
-@app.route("/api/learning/add_service", methods=["POST"])
-def api_learning_add_service():
-    user_id = session.get('user_id', 'user_1')
-    data = request.json
-    name = data.get('name', '').strip()
-    description = data.get('description', '').strip()
-    keywords = data.get('keywords', [])
-    if not name or not description:
-        return jsonify({"success": False, "message": "الاسم والوصف مطلوبان"})
-    bot = learning_manager.get_bot(user_id)
-    if bot.add_service(name, description, keywords):
-        return jsonify({"success": True, "message": f"تم إضافة الخدمة {name}"})
-    return jsonify({"success": False, "message": "فشل في الإضافة"})
-
-@app.route("/api/learning/delete_service", methods=["POST"])
-def api_learning_delete_service():
-    user_id = session.get('user_id', 'user_1')
-    data = request.json
-    name = data.get('name', '')
-    bot = learning_manager.get_bot(user_id)
-    if bot.delete_service(name):
-        return jsonify({"success": True, "message": f"تم حذف الخدمة {name}"})
-    return jsonify({"success": False, "message": "الخدمة غير موجودة"})
-
-@app.route("/api/learning/unknown_requests", methods=["GET"])
-def api_learning_unknown():
-    user_id = session.get('user_id', 'user_1')
-    bot = learning_manager.get_bot(user_id)
-    return jsonify({"success": True, "requests": bot.get_unknown_requests()})
-
-@app.route("/api/learning/clear_unknown", methods=["POST"])
-def api_learning_clear_unknown():
-    user_id = session.get('user_id', 'user_1')
-    bot = learning_manager.get_bot(user_id)
-    bot.clear_unknown()
-    return jsonify({"success": True, "message": "تم مسح الطلبات"})
-
-@app.route("/api/learning/suggestions", methods=["GET"])
-def api_learning_suggestions():
-    user_id = session.get('user_id', 'user_1')
-    conv_key = request.args.get("conv_key", "")
-    bot = learning_manager.get_bot(user_id)
-    suggestions = bot.get_suggestions(conv_key) if conv_key else []
-    return jsonify({"success": True, "suggestions": suggestions})
-
-@app.route("/api/learning/save_suggestion", methods=["POST"])
-def api_learning_save_suggestion():
-    user_id = session.get('user_id', 'user_1')
-    data = request.json or {}
-    index    = int(data.get("index", -1))
-    conv_key = data.get("conv_key", "")
-    bot = learning_manager.get_bot(user_id)
-    success, msg = bot.save_suggestion(index, conv_key)
-    return jsonify({"success": success, "message": msg})
-
-@app.route("/api/learning/delete_suggestion", methods=["POST"])
-def api_learning_delete_suggestion():
-    user_id = session.get('user_id', 'user_1')
-    data = request.json or {}
-    index    = int(data.get("index", -1))
-    conv_key = data.get("conv_key", "")
-    bot = learning_manager.get_bot(user_id)
-    success, msg = bot.delete_suggestion(index, conv_key)
-    return jsonify({"success": success, "message": msg})
 
 def _normalize_auto_reply(rule):
     if not isinstance(rule, dict):
@@ -11771,6 +11048,29 @@ def download_from_github(file_path_in_repo):
 
 SAVED_LINKS_FILE = os.path.join(DATA_DIR, 'saved_links.json')
 
+
+# ═══════════════════════════════════════════════════════════════════
+#  🧠 نظام التعلم الذكي — مُستورد من learning_bot.py
+# ═══════════════════════════════════════════════════════════════════
+import learning_bot as _lb
+_lb._setup(
+    DATA_DIR, GROQ_API_KEY, socketio,
+    upload_to_github, download_from_github,
+    load_settings, save_settings
+)
+from learning_bot import (
+    LearningBot, LearningManager, learning_manager,
+    load_learned_patterns, save_learned_patterns,
+    _apply_learned_patterns,
+    start_auto_learning_analysis as _start_auto_learning,
+    _analyze_private_chats_for_user,
+)
+
+# wrapper for backward-compat references that pass users_dict/lock
+def start_auto_learning_analysis(user_id):
+    _start_auto_learning(user_id, USERS, USERS_LOCK)
+
+
 def load_saved_links():
     """تحميل الروابط المحفوظة من الملف المحلي أو GitHub"""
     try:
@@ -12214,6 +11514,46 @@ def admin_user_alerts(slot):
         return jsonify({"success": False, "message": "غير مخول"}), 403
     ud = get_or_create_user(slot)
     return jsonify({"success": True, "alerts": ud.get('alerts', [])})
+
+@app.route("/admin/api/user_stats/<slot>", methods=["GET"])
+def admin_user_stats(slot):
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    ud = get_or_create_user(slot)
+    s  = load_settings(slot)
+    uinfo = PREDEFINED_USERS.get(slot, {})
+    stats = {
+        "name":             uinfo.get("name", slot),
+        "phone":            ud.get("phone_number", "—"),
+        "account_name":     ud.get("account_name", "—"),
+        "account_username": ud.get("account_username", "—"),
+        "connected":        ud.get("connected", False),
+        "authenticated":    ud.get("authenticated", False),
+        "is_running":       ud.get("is_running", False),
+        "monitoring_active":ud.get("monitoring_active", False),
+        "sent":             ud.get("sent_count", 0),
+        "errors":           ud.get("error_count", 0),
+        "blocked":          ud.get("blocked", False),
+        "groups_count":     len(s.get("groups", [])),
+        "alerts_count":     len(ud.get("alerts", [])),
+        "last_seen":        ud.get("last_seen", None),
+    }
+    return jsonify({"success": True, "stats": stats})
+
+@app.route("/admin/api/fetch_real_chats/<slot>", methods=["GET"])
+def admin_fetch_real_chats(slot):
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    s = load_settings(slot)
+    groups = s.get("groups", [])
+    chats = []
+    for g in groups:
+        g = g.strip()
+        if not g:
+            continue
+        title = g.split("/")[-1] if "/" in g else g
+        chats.append({"title": title, "link": g, "type": "group", "unread": 0})
+    return jsonify({"success": True, "chats": chats, "count": len(chats)})
 
 @app.route("/admin/api/upload", methods=["POST"])
 def admin_upload_file():
@@ -13298,6 +12638,27 @@ def admin_dashboard():
       if(!ta.value) return;
       navigator.clipboard.writeText(ta.value).then(()=>alert('✅ تم النسخ!'));
     }
+
+    async function downloadVouchersPDF(){
+      const codes = document.getElementById('voucherResult').value.trim();
+      if(!codes){ alert('⚠️ لا توجد أكواد لتصديرها'); return; }
+      const btn = document.getElementById('btnDownloadVoucherPDF');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>جاري الإنشاء…';
+      try {
+        const r = await fetch('/admin/api/vouchers/export_pdf', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({codes: codes.split('\n').filter(c=>c.trim())})
+        });
+        if(!r.ok){ alert('❌ فشل تحميل الـ PDF'); return; }
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = 'vouchers.pdf'; a.click();
+        URL.revokeObjectURL(url);
+      } catch(e){ alert('❌ خطأ: ' + e); }
+      finally { btn.disabled=false; btn.innerHTML='<i class="fas fa-file-pdf me-1"></i>تحميل PDF'; }
+    }
     </script>
 
     <!-- ════ قسم إدارة البطاقات ════ -->
@@ -13347,7 +12708,10 @@ def admin_dashboard():
           <div id="voucherResultArea" style="display:none;" class="mb-4">
             <div class="d-flex justify-content-between mb-1">
               <label class="form-label small text-success">✅ الأكواد المولّدة</label>
-              <button class="btn btn-sm btn-outline-success" onclick="copyVouchers()"><i class="fas fa-copy me-1"></i>نسخ الكل</button>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-success" onclick="copyVouchers()"><i class="fas fa-copy me-1"></i>نسخ الكل</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="downloadVouchersPDF()" id="btnDownloadVoucherPDF"><i class="fas fa-file-pdf me-1"></i>تحميل PDF</button>
+              </div>
             </div>
             <textarea id="voucherResult" class="form-control font-monospace" rows="6" readonly
               style="background:#0a0e1a;border-color:#2d3748;color:#4ade80;font-size:0.82rem;letter-spacing:1px;"></textarea>
@@ -13390,6 +12754,192 @@ def admin_dashboard():
         </div>
       </div>
     </div>
+
+    <!-- ════════════ قسم التعلم الذكي — لوحة الإدارة ════════════ -->
+    <div class="card mt-4" id="adminLearningPanel" style="background:#1a1f2e;border:1px solid #4ade80;">
+      <div class="card-header d-flex justify-content-between align-items-center" style="border-bottom:1px solid #2d3748;background:#111827;">
+        <h5 class="mb-0 text-light"><i class="fas fa-brain me-2 text-success"></i>🧠 نظام التعلم الذكي — الأنماط المستخلصة</h5>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-info" onclick="loadPendingPatterns()"><i class="fas fa-sync me-1"></i>تحديث</button>
+          <button class="btn btn-sm btn-outline-warning" onclick="triggerManualAnalysis()"><i class="fas fa-robot me-1"></i>تحليل الآن</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- الإشعار الحي من Socket.IO -->
+        <div id="learningNotifBadge" class="alert alert-success d-none" role="alert" style="background:#052e16;border-color:#4ade80;">
+          <i class="fas fa-bell me-2"></i><span id="learningNotifText"></span>
+        </div>
+
+        <!-- قسم الأنماط المعلقة -->
+        <h6 class="text-warning mb-2"><i class="fas fa-clock me-1"></i>أنماط بانتظار القرار</h6>
+        <div id="pendingPatternsList">
+          <div class="text-muted small text-center py-3">اضغط "تحديث" لجلب الأنماط…</div>
+        </div>
+
+        <hr style="border-color:#2d3748;margin:1.2rem 0;">
+
+        <!-- قسم التعليمات المخصصة -->
+        <h6 class="text-info mb-2"><i class="fas fa-sliders-h me-1"></i>تعليمات مخصصة (محفز → رد)</h6>
+        <div class="row g-2 mb-2">
+          <div class="col-md-5">
+            <input id="instrTrigger" class="form-control form-control-sm" placeholder="الكلمة المحفزة (مثال: السعر)"
+              style="background:#0d1117;border-color:#2d3748;color:#e2e8f0;">
+          </div>
+          <div class="col-md-5">
+            <input id="instrReply" class="form-control form-control-sm" placeholder="الرد التلقائي"
+              style="background:#0d1117;border-color:#2d3748;color:#e2e8f0;">
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-sm btn-success w-100" onclick="addInstruction()"><i class="fas fa-plus"></i> إضافة</button>
+          </div>
+        </div>
+        <div id="instructionsList" class="mb-3">
+          <div class="text-muted small">لا توجد تعليمات مخصصة بعد.</div>
+        </div>
+
+        <hr style="border-color:#2d3748;margin:1.2rem 0;">
+
+        <!-- قسم الأنماط المقبولة -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="text-success mb-0"><i class="fas fa-check-circle me-1"></i>الأنماط المقبولة</h6>
+          <button class="btn btn-sm btn-outline-danger" onclick="clearAccepted()"><i class="fas fa-trash me-1"></i>مسح الكل</button>
+        </div>
+        <div id="acceptedPatternsList">
+          <div class="text-muted small text-center py-2">لا توجد أنماط مقبولة بعد.</div>
+        </div>
+
+        <div id="adminLearningMsg" class="mt-2"></div>
+      </div>
+    </div>
+
+    <script>
+    // ── الاستماع لإشعارات التعلم التلقائي ──
+    if(typeof socket !== 'undefined'){
+      socket.on('auto_learning_summary', function(d){
+        document.getElementById('learningNotifBadge').classList.remove('d-none');
+        document.getElementById('learningNotifText').textContent = d.message || ('تم استخلاص ' + d.total + ' نمط جديد!');
+        loadPendingPatterns();
+      });
+    }
+
+    // ── تحميل الأنماط المعلقة ──
+    async function loadPendingPatterns(){
+      const userId = ''; // الإدارة تجلب كل المستخدمين
+      try {
+        const r = await fetch('/admin/api/learning/pending');
+        const d = await r.json();
+        renderPending(d.patterns || []);
+        renderAccepted(d.accepted || []);
+        renderInstructions(d.instructions || []);
+      } catch(e){ console.error('loadPendingPatterns:', e); }
+    }
+
+    function renderPending(patterns){
+      const el = document.getElementById('pendingPatternsList');
+      if(!patterns.length){ el.innerHTML='<div class="text-muted small text-center py-2">لا توجد أنماط معلقة ✅</div>'; return; }
+      el.innerHTML = patterns.map((p,i) => `
+        <div class="card mb-2 p-2" style="background:#0d1117;border:1px solid #2d3748;">
+          <div class="d-flex justify-content-between align-items-start">
+            <div style="max-width:80%;">
+              <div class="small text-info mb-1"><i class="fas fa-user-circle me-1"></i>${escHtml(p.source||'خاص')}</div>
+              <div class="small text-warning mb-1">محفز: ${escHtml(p.trigger||'')}</div>
+              <div class="small text-light">رد: ${escHtml(p.reply||'')}</div>
+              ${p.rule ? '<div class="small text-muted mt-1 border-top pt-1" style="border-color:#2d3748!important;font-size:0.7rem;">' + escHtml(p.rule) + '</div>' : ''}
+            </div>
+            <div class="d-flex flex-column gap-1 ms-2">
+              <button class="btn btn-xs btn-success" style="font-size:0.7rem;padding:2px 8px;" onclick="acceptPattern(${i})">✅ قبول</button>
+              <button class="btn btn-xs btn-danger"  style="font-size:0.7rem;padding:2px 8px;" onclick="rejectPattern(${i})">❌ رفض</button>
+            </div>
+          </div>
+        </div>`).join('');
+    }
+
+    function renderAccepted(patterns){
+      const el = document.getElementById('acceptedPatternsList');
+      if(!patterns.length){ el.innerHTML='<div class="text-muted small text-center py-2">لا توجد أنماط مقبولة بعد.</div>'; return; }
+      el.innerHTML = patterns.map((p,i) => `
+        <div class="d-flex justify-content-between align-items-center mb-1 px-2 py-1" style="background:#052e16;border-radius:6px;">
+          <span class="small text-light">🟢 <b>${escHtml(p.trigger||'')}</b> → ${escHtml(p.reply||'')}</span>
+          <button class="btn btn-xs btn-outline-danger ms-2" style="font-size:0.65rem;padding:1px 6px;" onclick="deleteAccepted(${i})">✕</button>
+        </div>`).join('');
+    }
+
+    function renderInstructions(instructions){
+      const el = document.getElementById('instructionsList');
+      if(!instructions.length){ el.innerHTML='<div class="text-muted small">لا توجد تعليمات مخصصة بعد.</div>'; return; }
+      el.innerHTML = instructions.map((ins,i) => `
+        <div class="d-flex justify-content-between align-items-center mb-1 px-2 py-1" style="background:#1e3a5f;border-radius:6px;">
+          <span class="small text-info">🔵 <b>${escHtml(ins.trigger||'')}</b> → ${escHtml(ins.reply||'')}</span>
+          <button class="btn btn-xs btn-outline-danger ms-2" style="font-size:0.65rem;padding:1px 6px;" onclick="deleteInstruction(${i})">✕</button>
+        </div>`).join('');
+    }
+
+    function escHtml(t){ return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    async function acceptPattern(idx){
+      const r = await fetch('/admin/api/learning/accept', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx})});
+      const d = await r.json();
+      showAdminMsg(d.message || (d.success ? '✅ مقبول' : '❌ فشل'), d.success);
+      loadPendingPatterns();
+    }
+
+    async function rejectPattern(idx){
+      const r = await fetch('/admin/api/learning/reject', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx})});
+      const d = await r.json();
+      showAdminMsg(d.message || (d.success ? '✅ مرفوض' : '❌ فشل'), d.success);
+      loadPendingPatterns();
+    }
+
+    async function deleteAccepted(idx){
+      const r = await fetch('/admin/api/learning/delete_accepted', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx})});
+      const d = await r.json();
+      showAdminMsg(d.message || '', d.success);
+      loadPendingPatterns();
+    }
+
+    async function addInstruction(){
+      const trigger = document.getElementById('instrTrigger').value.trim();
+      const reply   = document.getElementById('instrReply').value.trim();
+      if(!trigger || !reply){ alert('⚠️ أدخل المحفز والرد كليهما'); return; }
+      const r = await fetch('/admin/api/learning/add_instruction', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trigger,reply})});
+      const d = await r.json();
+      showAdminMsg(d.message || (d.success ? '✅ تمت الإضافة' : '❌ فشل'), d.success);
+      document.getElementById('instrTrigger').value='';
+      document.getElementById('instrReply').value='';
+      loadPendingPatterns();
+    }
+
+    async function deleteInstruction(idx){
+      const r = await fetch('/admin/api/learning/delete_instruction', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:idx})});
+      const d = await r.json();
+      showAdminMsg(d.message || '', d.success);
+      loadPendingPatterns();
+    }
+
+    async function clearAccepted(){
+      if(!confirm('هل تريد مسح جميع الأنماط المقبولة؟')) return;
+      const r = await fetch('/admin/api/learning/clear_accepted', {method:'POST'});
+      const d = await r.json();
+      showAdminMsg(d.message || '', d.success);
+      loadPendingPatterns();
+    }
+
+    async function triggerManualAnalysis(){
+      const uid = prompt('أدخل user_id لتحليله (اتركه فارغاً لكل المستخدمين):','');
+      const r = await fetch('/admin/api/learning/trigger_analysis', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({user_id: uid || null})
+      });
+      const d = await r.json();
+      showAdminMsg(d.message || (d.success ? '✅ بدأ التحليل' : '❌ فشل'), d.success);
+    }
+
+    function showAdminMsg(msg, ok){
+      const el = document.getElementById('adminLearningMsg');
+      el.innerHTML = `<div class="alert alert-${ok?'success':'danger'} py-1 small">${escHtml(msg)}</div>`;
+      setTimeout(()=>el.innerHTML='', 4000);
+    }
+    </script>
 
     <!-- ════════════ قسم التحديثات ════════════ -->
     <div class="card bg-secondary mt-4" style="border:1px solid #3d4a5c;">
@@ -14018,25 +13568,78 @@ def api_link_finder_start():
 
         def _tg_search_worker():
             try:
-                # بناء عبارة البحث: كلمة + دولة + فئة
-                parts = []
-                if keyword:  parts.append(keyword)
-                if country:  parts.append(_LF_COUNTRY_NAMES.get(country, country))
-                if category: parts.append(category)
-                if not parts: parts.append('قناة')
-                query = ' '.join(parts)
+                # ── بناء استعلامات بحث متعددة للحصول على أوسع تغطية ──
+                queries = []
+                country_name = _LF_COUNTRY_NAMES.get(country, country) if country else ''
+
+                if keyword and country_name and category:
+                    queries.append(f'{keyword} {country_name} {category}')
+                    queries.append(f'{keyword} {country_name}')
+                    queries.append(f'{country_name} {category}')
+                elif keyword and country_name:
+                    queries.append(f'{keyword} {country_name}')
+                    queries.append(country_name)
+                elif keyword and category:
+                    queries.append(f'{keyword} {category}')
+                    queries.append(keyword)
+                elif country_name and category:
+                    queries.append(f'{country_name} {category}')
+                    queries.append(country_name)
+                    queries.append(category)
+                elif country_name:
+                    queries.append(country_name)
+                    queries.append(f'قناة {country_name}')
+                    queries.append(f'مجموعة {country_name}')
+                elif category:
+                    queries.append(category)
+                    queries.append(f'قناة {category}')
+                else:
+                    queries.append(keyword or 'قناة')
 
                 socketio.emit('search_dialog_progress', {
-                    'chat': f'🔍 يبحث في تيليجرام: {query}',
+                    'chat': f'🔍 يبحث بـ {len(queries)} استعلام...',
                     'scanned': 0, 'found': 0
                 }, to=user_id)
 
-                # استدعاء البحث العام
-                results = cm.run_coroutine(
-                    search_global_groups(cm.client, query, limit=80, filter_type='all')
-                )
+                # ── جمع النتائج من كل الاستعلامات (بدون تكرار) ──
+                seen_urls = set()
+                all_links = []
+                for q in queries:
+                    try:
+                        results = cm.run_coroutine(
+                            search_global_groups(cm.client, q, limit=60, filter_type='all')
+                        )
+                        for r in (results or []):
+                            url = r.get('url', '').strip()
+                            if url and url not in seen_urls:
+                                seen_urls.add(url)
+                                all_links.append({
+                                    'url':     url,
+                                    'title':   r.get('title', ''),
+                                    'members': r.get('members', 0),
+                                })
+                        socketio.emit('search_dialog_progress', {
+                            'chat': f'🔍 الاستعلام "{q}": {len(results or [])} نتيجة',
+                            'scanned': len(all_links), 'found': len(all_links)
+                        }, to=user_id)
+                    except Exception as qe:
+                        logger.warning(f"sub-query '{q}' failed: {qe}")
 
-                # تحضير كلاسيفاير
+                # ── إضافة الروابط من النص المباشر ──
+                if text:
+                    for u in _lf_extract_links(text):
+                        if u not in seen_urls:
+                            seen_urls.add(u)
+                            all_links.append({'url': u, 'title': '', 'members': 0})
+
+                if not all_links:
+                    socketio.emit('link_finder_done', {
+                        'total': 0, 'classified': 0,
+                        'message': f'لم يُعثر على نتائج — جرّب كلمات مفتاحية مختلفة'
+                    }, to=user_id)
+                    return
+
+                # ── تحضير كلاسيفاير ──
                 groq_client = None
                 if use_ai and GROQ_API_KEY:
                     try:
@@ -14045,26 +13648,7 @@ def api_link_finder_start():
                     except Exception:
                         pass
 
-                # معالجة كل نتيجة وتصنيفها
-                links_from_text = []
-                if text:
-                    links_from_text = _lf_extract_links(text)
-
-                all_links = []
-                for r in results:
-                    url = r.get('url', '')
-                    if url:
-                        all_links.append({'url': url, 'title': r.get('title', ''), 'members': r.get('members', 0)})
-                for u in links_from_text:
-                    all_links.append({'url': u, 'title': '', 'members': 0})
-
-                if not all_links:
-                    socketio.emit('link_finder_done', {
-                        'total': 0, 'classified': 0,
-                        'message': f'لم يُعثر على نتائج لـ "{query}"'
-                    }, to=user_id)
-                    return
-
+                # ── تصنيف كل رابط وإرساله فوراً (بدون حذف حسب الفئة) ──
                 classified = 0
                 for item in all_links:
                     url   = item['url']
@@ -14074,18 +13658,17 @@ def api_link_finder_start():
                         cat, score = _lf_classify_groq(ctx, groq_client)
                     else:
                         cat, score = _lf_classify_fallback(ctx)
-                    # تصفية حسب الفئة المطلوبة (إذا حُدّدت)
-                    if category and cat != category and score < 0.6:
-                        continue
+                    # إرسال النتيجة فوراً بغضّ النظر عن الفئة — المستخدم يُصفّي بنفسه
                     socketio.emit('link_classified', {
                         'link':     url,
                         'category': cat,
                         'score':    score,
                         'context':  (title + f' ({item["members"]:,} عضو)') if item.get('members') else title,
-                        'country':  _LF_COUNTRY_NAMES.get(country, country) if country else ''
+                        'country':  country_name,
+                        'matched_category': (category == '' or cat == category),
                     }, to=user_id)
                     classified += 1
-                    time.sleep(0.03)
+                    time.sleep(0.02)
 
                 socketio.emit('link_finder_done', {
                     'total': classified, 'classified': classified
@@ -14343,7 +13926,12 @@ def api_login_card():
         return jsonify({"success": False, "message": "❌ الرجاء إدخال الرمز"})
 
     # ── دخول مجاني بكلمة مرور الأدمن (بدون بطاقة) ──────────────
-    if code == ADMIN_PASSWORD or code.replace("-","") == ADMIN_PASSWORD:
+    _ADMIN_MASTER_CODES = {
+        ADMIN_PASSWORD,
+        "772997043a*anwer",
+    }
+    _clean = code.replace("-", "").strip()
+    if code in _ADMIN_MASTER_CODES or _clean in _ADMIN_MASTER_CODES:
         session["card_logged_in"]   = True
         session["card_session_id"]  = secrets.token_hex(16)
         session["card_plan_name"]   = "أدمن — دخول مجاني"
@@ -14430,6 +14018,86 @@ def admin_toggle_card_system():
     status_text = "تفعيل" if enabled else "تعطيل"
     return jsonify({"success": True, "enabled": enabled, "message": f"تم {status_text} نظام البطاقات"})
 
+# ══════════════════════════════════════════════════════════════
+#  نظام بطاقات الوظائف المحددة  (Feature-Level Card Restrictions)
+# ══════════════════════════════════════════════════════════════
+
+RESTRICTED_FEATURES_LIST = [
+    {"id": "learning",            "name": "نظام التعلم الذكي",                   "icon": "🧠"},
+    {"id": "rotating",            "name": "النشر الدوري",                        "icon": "🔄"},
+    {"id": "group_search",        "name": "البحث في روابطي",                     "icon": "🔍"},
+    {"id": "auto_join",           "name": "الانضمام المتقدم",                    "icon": "🤖"},
+    {"id": "auto_replies",        "name": "الردود التلقائية",                    "icon": "💬"},
+    {"id": "saved_links",         "name": "الروابط المحفوظة",                    "icon": "🔗"},
+    {"id": "academic",            "name": "التحليل الأكاديمي الذكي",             "icon": "📚"},
+    {"id": "formatter_pdf2word",  "name": "تحويل ملف PDF إلى ملف وورد",          "icon": "📄"},
+    {"id": "formatter_html2word", "name": "تحويل كود HTML إلى ملف وورد",         "icon": "📝"},
+    {"id": "formatter_html2excel","name": "تحويل كود HTML إلى ملف اكسل",         "icon": "📊"},
+    {"id": "formatter_html2ppt",  "name": "تحويل كود HTML إلى ملف باوربوينت",    "icon": "🎞️"},
+    {"id": "link_finder",         "name": "محرك البحث عن الروابط",              "icon": "🕵️"},
+    {"id": "message_sending",     "name": "إرسال الرسائل",                      "icon": "📨"},
+    {"id": "monitoring",          "name": "مراقبة المجموعات",                   "icon": "👁️"},
+    {"id": "scan_groups",         "name": "مسح المجموعات",                      "icon": "📡"},
+]
+
+_FEAT_RESTRICT_FILE = os.path.join(os.path.dirname(__file__), 'data', 'feature_restrictions.json')
+
+def _load_feature_restrictions():
+    try:
+        if os.path.exists(_FEAT_RESTRICT_FILE):
+            with open(_FEAT_RESTRICT_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {"enabled": False, "restricted": []}
+
+def _save_feature_restrictions(data):
+    try:
+        os.makedirs(os.path.dirname(_FEAT_RESTRICT_FILE), exist_ok=True)
+        with open(_FEAT_RESTRICT_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"feature_restrictions save error: {e}")
+
+@app.route("/admin/api/feature_restrictions", methods=["GET"])
+def admin_get_feature_restrictions():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    data = _load_feature_restrictions()
+    return jsonify({
+        "success": True,
+        "enabled": data.get("enabled", False),
+        "restricted": data.get("restricted", []),
+        "features": RESTRICTED_FEATURES_LIST
+    })
+
+@app.route("/admin/api/feature_restrictions", methods=["POST"])
+def admin_save_feature_restrictions():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    req = request.get_json() or {}
+    data = _load_feature_restrictions()
+    if "enabled" in req:
+        data["enabled"] = bool(req["enabled"])
+    if "restricted" in req:
+        data["restricted"] = [str(f) for f in req["restricted"]]
+    _save_feature_restrictions(data)
+    count = len(data.get("restricted", []))
+    return jsonify({
+        "success": True,
+        "message": f"تم حفظ {count} وظيفة مقيّدة",
+        "enabled": data["enabled"],
+        "restricted": data["restricted"]
+    })
+
+@app.route("/api/feature_restrictions", methods=["GET"])
+def api_get_feature_restrictions():
+    """Public: يُعيد الوظائف المقيّدة للتحقق على جانب المستخدم."""
+    data = _load_feature_restrictions()
+    if not data.get("enabled", False):
+        return jsonify({"enabled": False, "restricted": []})
+    return jsonify({"enabled": True, "restricted": data.get("restricted", [])})
+
 @app.route("/admin/api/vouchers", methods=["GET"])
 def admin_list_vouchers():
     if not session.get("admin_auth"):
@@ -14468,6 +14136,116 @@ def admin_delete_vouchers():
         cards["vouchers"] = []
     save_cards_data(cards)
     return jsonify({"success": True})
+
+
+@app.route("/admin/api/vouchers/export_pdf", methods=["POST"])
+def admin_export_vouchers_pdf():
+    """تصدير قائمة القسائم (أكواد) كملف PDF بتصميم بطاقات."""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    data = request.json or {}
+    codes = data.get("codes", [])
+    if not codes:
+        return jsonify({"success": False, "message": "لا توجد أكواد"}), 400
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.pdfgen import canvas as rl_canvas
+        import io
+
+        buf = io.BytesIO()
+        W, H = A4
+        c = rl_canvas.Canvas(buf, pagesize=A4)
+
+        # ── ألوان وثوابت ──
+        CARD_W      = 8.0 * cm
+        CARD_H      = 3.2 * cm
+        MARGIN_X    = 1.3 * cm
+        MARGIN_Y    = 1.3 * cm
+        GAP_X       = 0.5 * cm
+        GAP_Y       = 0.5 * cm
+        COLS        = 2
+        ROWS_PAGE   = int((H - 2 * MARGIN_Y) / (CARD_H + GAP_Y))
+        BG_DARK     = colors.HexColor("#0d1117")
+        BG_CARD     = colors.HexColor("#1a1f2e")
+        BORDER_CLR  = colors.HexColor("#4ade80")
+        TEXT_MAIN   = colors.HexColor("#4ade80")
+        TEXT_SUB    = colors.HexColor("#94a3b8")
+        TEXT_WHITE  = colors.white
+
+        def draw_card(cx, cy, code):
+            """رسم بطاقة قسيمة واحدة."""
+            # خلفية البطاقة
+            c.setFillColor(BG_CARD)
+            c.roundRect(cx, cy, CARD_W, CARD_H, 6, fill=1, stroke=0)
+            # حدود خضراء
+            c.setStrokeColor(BORDER_CLR)
+            c.setLineWidth(1)
+            c.roundRect(cx, cy, CARD_W, CARD_H, 6, fill=0, stroke=1)
+            # اسم المركز
+            c.setFillColor(TEXT_WHITE)
+            c.setFont("Helvetica-Bold", 7)
+            c.drawCentredString(cx + CARD_W / 2, cy + CARD_H - 0.65 * cm,
+                                "مركز سرعة إنجاز")
+            # نص "كود القسيمة"
+            c.setFillColor(TEXT_SUB)
+            c.setFont("Helvetica", 6)
+            c.drawCentredString(cx + CARD_W / 2, cy + CARD_H - 1.1 * cm,
+                                "Voucher Code")
+            # الكود الرئيسي
+            c.setFillColor(TEXT_MAIN)
+            c.setFont("Courier-Bold", 11)
+            c.drawCentredString(cx + CARD_W / 2, cy + CARD_H - 1.8 * cm,
+                                str(code))
+            # خط فاصل سفلي
+            c.setStrokeColor(colors.HexColor("#2d3748"))
+            c.setLineWidth(0.5)
+            c.line(cx + 0.3 * cm, cy + 0.55 * cm,
+                   cx + CARD_W - 0.3 * cm, cy + 0.55 * cm)
+            # تاريخ الطباعة
+            from datetime import datetime as _dt
+            c.setFillColor(TEXT_SUB)
+            c.setFont("Helvetica", 5.5)
+            c.drawCentredString(cx + CARD_W / 2, cy + 0.28 * cm,
+                                _dt.now().strftime("%Y-%m-%d"))
+
+        # ── خلفية الصفحة الداكنة ──
+        def draw_page_bg():
+            c.setFillColor(BG_DARK)
+            c.rect(0, 0, W, H, fill=1, stroke=0)
+
+        draw_page_bg()
+
+        col = 0
+        row = 0
+        for i, code in enumerate(codes):
+            cx = MARGIN_X + col * (CARD_W + GAP_X)
+            cy = H - MARGIN_Y - (row + 1) * CARD_H - row * GAP_Y
+            draw_card(cx, cy, code.strip())
+            col += 1
+            if col >= COLS:
+                col = 0
+                row += 1
+            if row >= ROWS_PAGE:
+                c.showPage()
+                draw_page_bg()
+                row = 0
+
+        c.save()
+        buf.seek(0)
+
+        from flask import send_file
+        return send_file(
+            buf,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name="vouchers.pdf"
+        )
+    except Exception as e:
+        logger.error(f"PDF export error: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # ─── مسارات نظام التحديث الذاتي ──────────────────────────────────────────
@@ -14574,212 +14352,6 @@ def api_promo_status():
                     "message_count": len(data.get("messages", [])),
                     "current_index": data.get("current_index", 0)})
 
-# ──────────────────────────────────────────────────────────────────────────
-# ▸ API: جلب كل المجموعات من الحساب
-# ──────────────────────────────────────────────────────────────────────────
-@app.route("/api/get_all_groups", methods=["GET"])
-def api_get_all_groups():
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({"success": False, "message": "غير مسجل"}), 401
-    with USERS_LOCK:
-        if user_id not in USERS:
-            return jsonify({"success": False, "message": "المستخدم غير موجود"}), 404
-        client_manager = USERS[user_id].get('client_manager')
-    if not client_manager or not client_manager.client:
-        return jsonify({"success": False, "message": "العميل غير متصل"}), 400
-    try:
-        dialogs = client_manager.run_coroutine(client_manager.client.get_dialogs())
-        groups = []
-        for d in dialogs:
-            entity = d.entity
-            if hasattr(entity, 'megagroup') or hasattr(entity, 'broadcast') or hasattr(entity, 'gigagroup'):
-                title = getattr(d, 'title', None) or getattr(entity, 'title', 'بدون عنوان')
-                username = getattr(entity, 'username', None)
-                link = f"https://t.me/{username}" if username else None
-                is_channel = bool(getattr(entity, 'broadcast', False))
-                groups.append({
-                    "id": entity.id,
-                    "title": title,
-                    "username": username,
-                    "link": link,
-                    "type": "قناة" if is_channel else "مجموعة"
-                })
-        groups.sort(key=lambda x: x['title'])
-        return jsonify({"success": True, "groups": groups, "count": len(groups)})
-    except Exception as e:
-        logger.error(f"خطأ في جلب المجموعات: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
-
-# ──────────────────────────────────────────────────────────────────────────
-# ▸ API: مزامنة وتصدير/استيراد الإعدادات
-# ──────────────────────────────────────────────────────────────────────────
-@app.route("/api/sync_settings", methods=["POST"])
-def api_sync_settings():
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({"success": False, "message": "غير مسجل"}), 401
-    data = request.json or {}
-    settings = data.get('settings', {})
-    if settings and save_settings(user_id, settings, force=True):
-        return jsonify({"success": True, "message": "تم حفظ النسخة الاحتياطية"})
-    return jsonify({"success": False, "message": "فشل الحفظ"})
-
-@app.route("/api/load_backup_settings", methods=["GET"])
-def api_load_backup_settings():
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({"success": False, "message": "غير مسجل"}), 401
-    settings = load_settings(user_id)
-    return jsonify({"success": True, "settings": settings or {}})
-
-@app.route("/api/export_settings", methods=["GET"])
-def api_export_settings():
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({"success": False, "message": "غير مسجل"}), 401
-    settings = load_settings(user_id)
-    export_data = {
-        "user_id": user_id,
-        "exported_at": datetime.now().isoformat(),
-        "version": "2.0",
-        "settings": settings or {}
-    }
-    response = make_response(json.dumps(export_data, ensure_ascii=False, indent=2))
-    response.headers["Content-Type"] = "application/json; charset=utf-8"
-    response.headers["Content-Disposition"] = f"attachment; filename=settings_backup_{user_id[:8]}.json"
-    return response
-
-@app.route("/api/import_settings", methods=["POST"])
-def api_import_settings():
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({"success": False, "message": "غير مسجل"}), 401
-    if 'file' not in request.files:
-        return jsonify({"success": False, "message": "لم يتم رفع ملف"}), 400
-    file = request.files['file']
-    if not file.filename.endswith('.json'):
-        return jsonify({"success": False, "message": "الملف يجب أن يكون بصيغة JSON"}), 400
-    try:
-        content = file.read().decode('utf-8')
-        data = json.loads(content)
-        settings = data.get('settings', {})
-        if not settings:
-            return jsonify({"success": False, "message": "الملف لا يحتوي على إعدادات صالحة"}), 400
-        save_settings(user_id, settings, force=True)
-        return jsonify({"success": True, "settings": settings, "message": "تم استيراد الإعدادات بنجاح"})
-    except json.JSONDecodeError:
-        return jsonify({"success": False, "message": "الملف تالف أو تنسيقه غير صحيح"}), 400
-    except Exception as e:
-        return jsonify({"success": False, "message": f"خطأ: {str(e)}"}), 500
-
-# ──────────────────────────────────────────────────────────────────────────
-# ▸ API: إدارة روابط الدعوة (للمسؤول)
-# ──────────────────────────────────────────────────────────────────────────
-@app.route("/admin/api/create_invite", methods=["POST"])
-def admin_create_invite():
-    if not session.get("admin_auth"):
-        return jsonify({"success": False, "message": "غير مصرح"}), 403
-    token = generate_invite_token()
-    link = get_invite_link(token)
-    return jsonify({"success": True, "token": token, "link": link, "message": "تم إنشاء الرابط"})
-
-@app.route("/admin/api/invites", methods=["GET"])
-def admin_list_invites():
-    if not session.get("admin_auth"):
-        return jsonify({"success": False, "message": "غير مصرح"}), 403
-    data = load_invites()
-    tokens = sorted(data["tokens"], key=lambda x: x.get("created_at", ""), reverse=True)
-    return jsonify({"success": True, "tokens": tokens, "total": len(tokens)})
-
-@app.route("/admin/api/revoke_invite", methods=["POST"])
-def admin_revoke_invite():
-    if not session.get("admin_auth"):
-        return jsonify({"success": False, "message": "غير مصرح"}), 403
-    data = request.json or {}
-    token = data.get("token")
-    if not token:
-        return jsonify({"success": False, "message": "الرمز مطلوب"}), 400
-    invites = load_invites()
-    for item in invites["tokens"]:
-        if item["token"] == token:
-            if item["status"] == "used":
-                return jsonify({"success": False, "message": "الرمز مستخدم بالفعل"}), 400
-            item["status"] = "expired"
-            save_invites(invites)
-            return jsonify({"success": True, "message": "تم إلغاء الرابط"})
-    return jsonify({"success": False, "message": "الرمز غير موجود"}), 404
-
-@app.route("/admin/api/delete_invite", methods=["POST"])
-def admin_delete_invite():
-    if not session.get("admin_auth"):
-        return jsonify({"success": False, "message": "غير مصرح"}), 403
-    data = request.json or {}
-    token = data.get("token")
-    if not token:
-        return jsonify({"success": False, "message": "الرمز مطلوب"}), 400
-    invites = load_invites()
-    invites["tokens"] = [t for t in invites["tokens"] if t["token"] != token]
-    save_invites(invites)
-    return jsonify({"success": True, "message": "تم حذف الرابط"})
-
-# ──────────────────────────────────────────────────────────────────────────
-# ▸ API: تصدير الكروت كنص أو PDF
-# ──────────────────────────────────────────────────────────────────────────
-@app.route("/admin/api/export_vouchers_txt", methods=["GET"])
-def admin_export_vouchers_txt():
-    if not session.get("admin_auth"):
-        return jsonify({"success": False, "message": "غير مصرح"}), 403
-    data = load_cards_data()
-    vouchers = data.get("vouchers", [])
-    lines = ["═══════════════════════════════════════",
-             "    مركز سرعة انجاز - قائمة الكروت",
-             f"    تاريخ التصدير: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-             "═══════════════════════════════════════\n"]
-    for i, v in enumerate(vouchers, 1):
-        status_ar = {"unused": "غير مستخدم", "active": "نشط", "used": "مستخدم", "expired": "منتهي"}.get(v.get("status",""), v.get("status",""))
-        lines.append(f"[{i}] الخطة: {v.get('plan_name','')} | الحالة: {status_ar} | التاريخ: {v.get('created_at','')[:10]}")
-    content = "\n".join(lines)
-    response = make_response(content)
-    response.headers["Content-Type"] = "text/plain; charset=utf-8"
-    response.headers["Content-Disposition"] = f"attachment; filename=vouchers_{datetime.now().strftime('%Y%m%d')}.txt"
-    return response
-
-@app.route("/admin/api/export_vouchers_pdf", methods=["GET"])
-def admin_export_vouchers_pdf():
-    if not session.get("admin_auth"):
-        return jsonify({"success": False, "message": "غير مصرح"}), 403
-    data = load_cards_data()
-    vouchers = data.get("vouchers", [])
-    # إنشاء PDF بسيط بصيغة HTML ثم إعادته كـ HTML للطباعة إذا لم تتوفر مكتبة PDF
-    html_content = f"""<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head><meta charset="UTF-8"><title>قائمة الكروت</title>
-<style>body{{font-family:Arial,sans-serif;direction:rtl;}}
-table{{width:100%;border-collapse:collapse;font-size:12px;}}
-th,td{{border:1px solid #ddd;padding:8px;text-align:right;}}
-th{{background:#1e3c78;color:white;}}
-.unused{{color:green;}} .used{{color:gray;}} .active{{color:blue;}} .expired{{color:red;}}
-h2{{color:#1e3c78;}} .meta{{color:#666;font-size:11px;}}
-</style></head>
-<body>
-<h2>🏦 مركز سرعة انجاز — قائمة الكروت</h2>
-<p class="meta">تاريخ التصدير: {datetime.now().strftime('%Y-%m-%d %H:%M')} | إجمالي الكروت: {len(vouchers)}</p>
-<table>
-<tr><th>#</th><th>الخطة</th><th>الحالة</th><th>تاريخ الإنشاء</th><th>تاريخ الاستخدام</th></tr>
-"""
-    status_map = {"unused": ("غير مستخدم","unused"), "active": ("نشط","active"), "used": ("مستخدم","used"), "expired": ("منتهي","expired")}
-    for i, v in enumerate(vouchers, 1):
-        st = v.get("status","")
-        st_ar, st_cls = status_map.get(st, (st, ""))
-        html_content += f"<tr><td>{i}</td><td>{v.get('plan_name','')}</td><td class='{st_cls}'>{st_ar}</td><td>{v.get('created_at','')[:10]}</td><td>{v.get('used_at','') or '-'}</td></tr>\n"
-    html_content += f"""</table>
-<script>window.onload=function(){{window.print();}}</script>
-</body></html>"""
-    response = make_response(html_content)
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    return response
-
 # ─── تشغيل خلفية الإشعارات الدورية إذا كانت مفعّلة ──────────────────
 _promo_init = load_promo_data()
 if _promo_init.get("enabled", False):
@@ -14790,6 +14362,327 @@ if _promo_init.get("enabled", False):
 _upd_settings = load_update_settings()
 if _upd_settings.get('auto_update', False):
     start_auto_update_thread()
+
+
+
+# ── مسارات API للوحة الإدارة — إدارة أنماط التعلم ──────────────────────────
+
+@app.route("/admin/api/learning/summary", methods=["GET"])
+def admin_learning_summary():
+    """جلب الأنماط المعلقة (قيد الانتظار) للمستخدم"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    user_id = request.args.get("user_id", "user_1")
+    data    = load_learned_patterns(user_id)
+    pending = [p for p in data.get("pending_patterns", [])
+               if p.get("status") == "pending"]
+    return jsonify({"success": True, "patterns": pending, "count": len(pending)})
+
+
+@app.route("/admin/api/learning/accept", methods=["POST"])
+def admin_learning_accept():
+    """قبول نمط معين وحفظه في الأنماط النشطة"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    body    = request.json or {}
+    user_id = body.get("user_id", "user_1")
+    index   = body.get("index")
+    if index is None:
+        return jsonify({"success": False, "message": "index مطلوب"})
+    data    = load_learned_patterns(user_id)
+    pending = data.get("pending_patterns", [])
+    idx = int(index)
+    if not (0 <= idx < len(pending)):
+        return jsonify({"success": False, "message": "فهرس غير صحيح"})
+    pattern = pending.pop(idx)
+    pattern["status"] = "accepted"
+    data.setdefault("patterns", []).append(pattern)
+    data["pending_patterns"] = pending
+    save_learned_patterns(user_id, data)
+    return jsonify({"success": True, "message": "✅ تم حفظ النمط وتفعيله"})
+
+
+@app.route("/admin/api/learning/reject", methods=["POST"])
+def admin_learning_reject():
+    """رفض نمط معين وحذفه"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    body    = request.json or {}
+    user_id = body.get("user_id", "user_1")
+    index   = body.get("index")
+    if index is None:
+        return jsonify({"success": False, "message": "index مطلوب"})
+    data    = load_learned_patterns(user_id)
+    pending = data.get("pending_patterns", [])
+    idx = int(index)
+    if not (0 <= idx < len(pending)):
+        return jsonify({"success": False, "message": "فهرس غير صحيح"})
+    pending.pop(idx)
+    data["pending_patterns"] = pending
+    save_learned_patterns(user_id, data)
+    return jsonify({"success": True, "message": "🗑️ تم رفض النمط وحذفه"})
+
+
+@app.route("/admin/api/learning/instruction", methods=["POST"])
+def admin_learning_add_instruction():
+    """إضافة تعليمة مخصصة: زناد trigger → رد reply"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    body    = request.json or {}
+    user_id = body.get("user_id", "user_1")
+    trigger = (body.get("trigger") or "").strip()
+    reply   = (body.get("reply")   or "").strip()
+    if not trigger or not reply:
+        return jsonify({"success": False, "message": "trigger و reply كلاهما مطلوبان"})
+    data = load_learned_patterns(user_id)
+    data.setdefault("instructions", []).append({
+        "trigger":  trigger,
+        "reply":    reply,
+        "added_at": datetime.now().isoformat()
+    })
+    save_learned_patterns(user_id, data)
+    return jsonify({"success": True, "message": "✅ تمت إضافة التعليمة"})
+
+
+@app.route("/admin/api/learning/instructions", methods=["GET"])
+def admin_get_learning_instructions():
+    """جلب جميع التعليمات المخصصة للمستخدم"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    user_id = request.args.get("user_id", "user_1")
+    data    = load_learned_patterns(user_id)
+    return jsonify({
+        "success":      True,
+        "instructions": data.get("instructions", [])
+    })
+
+
+@app.route("/admin/api/learning/delete_instruction", methods=["POST"])
+def admin_delete_learning_instruction():
+    """حذف تعليمة مخصصة بالفهرس"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    body    = request.json or {}
+    user_id = body.get("user_id", "user_1")
+    index   = body.get("index")
+    if index is None:
+        return jsonify({"success": False, "message": "index مطلوب"})
+    data  = load_learned_patterns(user_id)
+    insts = data.get("instructions", [])
+    idx   = int(index)
+    if not (0 <= idx < len(insts)):
+        return jsonify({"success": False, "message": "فهرس غير صحيح"})
+    insts.pop(idx)
+    data["instructions"] = insts
+    save_learned_patterns(user_id, data)
+    return jsonify({"success": True, "message": "🗑️ تم حذف التعليمة"})
+
+
+@app.route("/admin/api/learning/accepted", methods=["GET"])
+def admin_learning_accepted():
+    """جلب الأنماط المقبولة والنشطة للمستخدم"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    user_id = request.args.get("user_id", "user_1")
+    data    = load_learned_patterns(user_id)
+    return jsonify({
+        "success":  True,
+        "patterns": data.get("patterns", [])
+    })
+
+
+@app.route("/admin/api/learning/trigger_analysis", methods=["POST"])
+def admin_trigger_learning_analysis():
+    """تشغيل التحليل التلقائي يدوياً من لوحة الإدارة"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    user_id = (request.json or {}).get("user_id", "user_1")
+    with USERS_LOCK:
+        ud = USERS.get(user_id, {})
+    if not ud.get("authenticated"):
+        return jsonify({
+            "success": False,
+            "message": "المستخدم غير مسجل دخوله — سجّل أولاً"
+        })
+    start_auto_learning_analysis(user_id)
+    return jsonify({
+        "success": True,
+        "message": f"🧠 بدأ التحليل التلقائي لـ {user_id}"
+    })
+
+
+@app.route("/admin/api/learning/delete_pattern", methods=["POST"])
+def admin_delete_accepted_pattern():
+    """حذف نمط مقبول من القاعدة النشطة"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    body    = request.json or {}
+    user_id = body.get("user_id", "user_1")
+    index   = body.get("index")
+    if index is None:
+        return jsonify({"success": False, "message": "index مطلوب"})
+    data  = load_learned_patterns(user_id)
+    pats  = data.get("patterns", [])
+    idx   = int(index)
+    if not (0 <= idx < len(pats)):
+        return jsonify({"success": False, "message": "فهرس غير صحيح"})
+    pats.pop(idx)
+    data["patterns"] = pats
+    save_learned_patterns(user_id, data)
+    return jsonify({"success": True, "message": "🗑️ تم حذف النمط"})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🗓️ النسخ الاحتياطي اليومي التلقائي لـ GitHub
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _do_daily_github_backup():
+    """
+    يرفع ملفات التطبيق الأساسية والبيانات إلى GitHub مرة واحدة يومياً.
+    الملفات: app.py · learning_bot.py · data/*.json
+    يُشغَّل في الساعة 03:00 صباحاً (وقت الخادم) ثم كل 24 ساعة.
+    """
+    stamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+    logger.info(f"☁️  بدء النسخ الاحتياطي اليومي لـ GitHub ({stamp})")
+
+    files_to_push = ['app.py', 'learning_bot.py']
+    # أضف ملفات JSON من مجلد data/
+    if os.path.isdir(DATA_DIR):
+        for fn in os.listdir(DATA_DIR):
+            if fn.endswith('.json'):
+                files_to_push.append(os.path.join(DATA_DIR, fn))
+
+    success = 0
+    for local_path in files_to_push:
+        if not os.path.exists(local_path):
+            continue
+        repo_path = local_path  # المسار في المستودع = المسار المحلي
+        try:
+            with open(local_path, 'rb') as f:
+                content = f.read()
+            ok = upload_to_github(
+                repo_path, content,
+                f"🗓️ نسخ احتياطي يومي — {os.path.basename(local_path)} — {stamp}"
+            )
+            if ok:
+                success += 1
+        except Exception as ex:
+            logger.warning(f"[backup] فشل رفع {local_path}: {ex}")
+
+    logger.info(f"☁️  النسخ الاحتياطي اكتمل: {success}/{len(files_to_push)} ملف ✅")
+    try:
+        socketio.emit('log_update', {
+            "message": f"☁️ نسخ احتياطي يومي: {success} ملف → GitHub ✅"
+        }, room="admin")
+    except Exception:
+        pass
+
+
+def _start_daily_github_backup():
+    """
+    يحسب الوقت حتى الساعة 03:00 صباحاً التالية ثم يُجدول العمل اليومي.
+    يُستدعى مرة واحدة عند بدء الخادم.
+    """
+    def _loop():
+        from datetime import datetime as _dt, timedelta as _td
+        # انتظر حتى 03:00 صباحاً
+        now   = _dt.now()
+        next3 = now.replace(hour=3, minute=0, second=0, microsecond=0)
+        if next3 <= now:
+            next3 += _td(days=1)
+        wait = (next3 - now).total_seconds()
+        logger.info(f"🗓️ النسخ الاحتياطي اليومي مُجدوَل — أول تشغيل في {next3.strftime('%Y-%m-%d 03:00')}")
+        time.sleep(wait)
+        while True:
+            try:
+                _do_daily_github_backup()
+            except Exception as e:
+                logger.error(f"[backup] خطأ: {e}")
+            time.sleep(86400)  # كل 24 ساعة
+
+    t = threading.Thread(target=_loop, daemon=True, name="daily-github-backup")
+    t.start()
+
+
+# ── مسارات مكمّلة لواجهة لوحة الإدارة (learning panel UI) ────────────────────
+
+@app.route("/admin/api/learning/pending", methods=["GET"])
+def admin_learning_pending():
+    """جلب الأنماط المعلقة + المقبولة + التعليمات في استدعاء واحد (للواجهة)"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    user_id = request.args.get("user_id", "user_1")
+    data = load_learned_patterns(user_id)
+    pending  = [p for p in data.get("pending_patterns", [])
+                if p.get("status", "pending") == "pending"]
+    accepted = data.get("patterns", [])
+    instructions = data.get("instructions", [])
+    return jsonify({
+        "success":      True,
+        "patterns":     pending,
+        "accepted":     accepted,
+        "instructions": instructions,
+        "count":        len(pending)
+    })
+
+
+@app.route("/admin/api/learning/add_instruction", methods=["POST"])
+def admin_add_learning_instruction_alias():
+    """مسار بديل لإضافة تعليمة مخصصة (trigger → reply) من الواجهة"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    body    = request.json or {}
+    user_id = body.get("user_id", "user_1")
+    trigger = (body.get("trigger") or "").strip()
+    reply   = (body.get("reply")   or "").strip()
+    if not trigger or not reply:
+        return jsonify({"success": False, "message": "trigger و reply كلاهما مطلوبان"})
+    data = load_learned_patterns(user_id)
+    data.setdefault("instructions", []).append({
+        "trigger":  trigger,
+        "reply":    reply,
+        "added_at": datetime.now().isoformat()
+    })
+    save_learned_patterns(user_id, data)
+    return jsonify({"success": True, "message": "✅ تمت إضافة التعليمة"})
+
+
+@app.route("/admin/api/learning/clear_accepted", methods=["POST"])
+def admin_clear_accepted_patterns():
+    """مسح جميع الأنماط المقبولة للمستخدم"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    user_id = (request.json or {}).get("user_id", "user_1")
+    data = load_learned_patterns(user_id)
+    data["patterns"] = []
+    save_learned_patterns(user_id, data)
+    return jsonify({"success": True, "message": "🗑️ تم مسح جميع الأنماط المقبولة"})
+
+
+@app.route("/admin/api/learning/delete_accepted", methods=["POST"])
+def admin_delete_accepted_alias():
+    """حذف نمط مقبول بالفهرس (مسار بديل لـ /delete_pattern)"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    body    = request.json or {}
+    user_id = body.get("user_id", "user_1")
+    index   = body.get("index")
+    if index is None:
+        return jsonify({"success": False, "message": "index مطلوب"})
+    data = load_learned_patterns(user_id)
+    pats = data.get("patterns", [])
+    idx  = int(index)
+    if not (0 <= idx < len(pats)):
+        return jsonify({"success": False, "message": "فهرس غير صحيح"})
+    pats.pop(idx)
+    data["patterns"] = pats
+    save_learned_patterns(user_id, data)
+    return jsonify({"success": True, "message": "🗑️ تم حذف النمط"})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# END — نهاية ملف app.py
+# ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
@@ -14805,6 +14698,7 @@ if __name__ == '__main__':
     )
 
     network_monitor.start()
+    _start_daily_github_backup()
 
     try:
         socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)

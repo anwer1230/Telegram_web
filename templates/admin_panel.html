@@ -497,6 +497,10 @@
             <i class="fas fa-bell"></i>
             <span>الإشعارات الدورية</span>
         </a>
+        <a class="nav-item" onclick="showSection('invites')" href="#">
+            <i class="fas fa-link"></i>
+            <span>روابط الدعوة</span>
+        </a>
         <a class="nav-item" onclick="showSection('files')" href="#">
             <i class="fas fa-folder-open"></i>
             <span>متصفح الملفات</span>
@@ -613,9 +617,20 @@
                             <i class="fas fa-list" style="color:#a5b4fc;"></i>
                             قائمة الكروت
                         </div>
-                        <button class="btn-sm-red" onclick="deleteUsedVouchers()">
-                            <i class="fas fa-trash"></i>حذف المستخدمة
-                        </button>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            <button class="btn-sm-act" onclick="loadVouchers()" title="تحديث">
+                                <i class="fas fa-sync-alt"></i>تحديث
+                            </button>
+                            <button class="btn-sm-green" onclick="window.open('/admin/api/export_vouchers_pdf','_blank')" title="طباعة / PDF">
+                                <i class="fas fa-file-pdf"></i>PDF
+                            </button>
+                            <button class="btn-sm-act" onclick="window.location.href='/admin/api/export_vouchers_txt'" title="تصدير نصي">
+                                <i class="fas fa-file-alt"></i>TXT
+                            </button>
+                            <button class="btn-sm-red" onclick="deleteUsedVouchers()">
+                                <i class="fas fa-trash"></i>حذف المستخدمة
+                            </button>
+                        </div>
                     </div>
                     <div class="panel-body" style="padding:12px;">
                         <div id="vouchersList" style="max-height:300px;overflow-y:auto;">
@@ -638,6 +653,41 @@
                         <div id="cardSessions" style="max-height:200px;overflow-y:auto;">
                             <div style="color:var(--muted);text-align:center;padding:24px;">
                                 <i class="fas fa-wifi me-2"></i>لا توجد جلسات نشطة حالياً
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ────────────── قسم روابط الدعوة ────────────── -->
+            <div id="sec-invites" class="section-pane fade-up" style="display:none;">
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <i class="fas fa-link" style="color:var(--green);"></i>
+                            روابط الدعوة (مرة واحدة)
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn-sm-green" onclick="adminCreateInvite()">
+                                <i class="fas fa-plus"></i>إنشاء رابط
+                            </button>
+                            <button class="btn-sm-act" onclick="adminLoadInvites()">
+                                <i class="fas fa-sync-alt"></i>تحديث
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="adminNewInviteBox" style="display:none;margin-bottom:12px;padding:12px;background:rgba(16,185,129,0.1);border:1px solid var(--green);border-radius:10px;">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <code id="adminNewInviteLink" style="color:#4ade80;font-size:0.8rem;word-break:break-all;flex:1;"></code>
+                                <button class="btn-sm-green" onclick="adminCopyInvite()"><i class="fas fa-copy"></i>نسخ</button>
+                            </div>
+                            <p style="color:var(--muted);font-size:0.72rem;margin:6px 0 0;">صالح لمرة واحدة فقط · 7 أيام</p>
+                        </div>
+                        <div id="adminInvitesMsg" style="font-size:0.82rem;margin-bottom:8px;"></div>
+                        <div id="adminInvitesList">
+                            <div style="color:var(--muted);text-align:center;padding:24px;">
+                                <i class="fas fa-link me-2"></i>اضغط تحديث لتحميل الروابط
                             </div>
                         </div>
                     </div>
@@ -1487,6 +1537,84 @@ async function checkForUpdate() {
             btn.innerHTML = '<i class="fas fa-cloud-download-alt me-1"></i>البحث عن تحديث';
         }, 3000);
     }
+}
+
+// ══════════════════════════════════════════════════════════
+//  إدارة روابط الدعوة (ادمن)
+// ══════════════════════════════════════════════════════════
+async function adminCreateInvite() {
+    var msg = document.getElementById('adminInvitesMsg');
+    if(msg) msg.innerHTML = '<span style="color:#a5b4fc"><i class="fas fa-spinner fa-spin me-1"></i>جاري الإنشاء...</span>';
+    try {
+        var r = await fetch('/admin/api/create_invite', {method:'POST'});
+        var d = await r.json();
+        if (d.success) {
+            document.getElementById('adminNewInviteLink').textContent = d.link;
+            document.getElementById('adminNewInviteBox').style.display = 'block';
+            if(msg) msg.innerHTML = '<span style="color:#4ade80">✅ تم إنشاء الرابط بنجاح</span>';
+            adminLoadInvites();
+        } else {
+            if(msg) msg.innerHTML = '<span style="color:#fca5a5">❌ ' + d.message + '</span>';
+        }
+    } catch(e) {
+        if(msg) msg.innerHTML = '<span style="color:#fca5a5">❌ ' + e.message + '</span>';
+    }
+}
+
+function adminCopyInvite() {
+    var txt = document.getElementById('adminNewInviteLink').textContent;
+    navigator.clipboard.writeText(txt).then(() => alert('✅ تم نسخ الرابط')).catch(() => {
+        var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); alert('✅ تم النسخ');
+    });
+}
+
+async function adminLoadInvites() {
+    var cont = document.getElementById('adminInvitesList');
+    if(!cont) return;
+    cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;"><i class="fas fa-spinner fa-spin me-1"></i>جاري التحميل...</div>';
+    try {
+        var r = await fetch('/admin/api/invites');
+        var d = await r.json();
+        if (!d.success) { cont.innerHTML = '<div style="color:#fca5a5;padding:12px;">❌ ' + d.message + '</div>'; return; }
+        var tokens = d.tokens || [];
+        if (!tokens.length) { cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;"><i class="fas fa-link me-1"></i>لا توجد روابط دعوة</div>'; return; }
+        var stMap = {active:'<span style="color:#4ade80">🟢 نشط</span>', used:'<span style="color:#60a5fa">🔵 مستخدم</span>', expired:'<span style="color:#f87171">🔴 منتهي</span>'};
+        var html = '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr style="border-bottom:1px solid var(--border);"><th style="padding:6px;text-align:right;">الرمز</th><th>الحالة</th><th>التاريخ</th><th>إجراء</th></tr></thead><tbody>';
+        tokens.forEach(t => {
+            var st = stMap[t.status] || t.status;
+            html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                <td style="padding:6px;"><code style="color:#fbbf24;font-size:0.7rem;">${t.token.slice(0,12)}...</code></td>
+                <td>${st}</td>
+                <td style="color:var(--muted);">${(t.created_at||'').slice(0,10)}</td>
+                <td style="display:flex;gap:4px;flex-wrap:wrap;">
+                    ${t.status==='active'?`<button class="btn-sm-red" style="padding:2px 8px;font-size:0.65rem;" onclick="adminRevokeInvite('${t.token}')"><i class="fas fa-ban"></i>إلغاء</button>`:''}
+                    <button class="btn-sm-act" style="padding:2px 8px;font-size:0.65rem;" onclick="adminDeleteInvite('${t.token}')"><i class="fas fa-trash"></i>حذف</button>
+                    ${t.status==='active'?`<button class="btn-sm-green" style="padding:2px 8px;font-size:0.65rem;" onclick="adminCopyTokenLink('${t.token}')"><i class="fas fa-copy"></i>نسخ</button>`:''}
+                </td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        cont.innerHTML = html;
+    } catch(e) { cont.innerHTML = '<div style="color:#fca5a5;padding:12px;">❌ ' + e.message + '</div>'; }
+}
+
+async function adminRevokeInvite(token) {
+    if (!confirm('إلغاء هذا الرابط؟')) return;
+    var r = await fetch('/admin/api/revoke_invite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token})});
+    var d = await r.json();
+    if(d.success) adminLoadInvites(); else alert('❌ ' + d.message);
+}
+
+async function adminDeleteInvite(token) {
+    if (!confirm('حذف هذا الرابط نهائياً؟')) return;
+    var r = await fetch('/admin/api/delete_invite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token})});
+    var d = await r.json();
+    if(d.success) adminLoadInvites(); else alert('❌ ' + d.message);
+}
+
+function adminCopyTokenLink(token) {
+    var link = window.location.origin + '/?invite=' + token;
+    navigator.clipboard.writeText(link).then(() => alert('✅ تم نسخ رابط الدعوة')).catch(() => { alert(link); });
 }
 
 // ══════════════════════════════════════════════════════════

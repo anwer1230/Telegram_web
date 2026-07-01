@@ -723,10 +723,33 @@
                                 </div>
                             </div>
 
+                            <!-- ─── خيارات وضع الإرسال ─── -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold"><i class="fas fa-paper-plane me-1 text-primary"></i>وضع الإرسال:</label>
+                                <div class="btn-group w-100" role="group" id="sendModeGroup">
+                                    <button type="button" class="btn btn-outline-primary active" id="sendSpecificBtn" onclick="setSendMode('specific')">
+                                        <i class="fas fa-list me-1"></i> مجموعات محددة
+                                    </button>
+                                    <button type="button" class="btn btn-outline-success" id="sendAllBtn" onclick="setSendMode('all')">
+                                        <i class="fas fa-globe me-1"></i> كل المجموعات
+                                    </button>
+                                </div>
+                                <div id="sendModeHelp" class="form-text text-info mt-1">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    <span id="sendModeText">أدخل روابط المجموعات في الحقل أدناه.</span>
+                                </div>
+                            </div>
+
                             <div class="mb-3">
                                 <label for="groups" class="form-label">مجموعات الإرسال</label>
-                                <textarea class="form-control" id="groups" rows="4"
-                                          placeholder="ضع كل مجموعة في سطر منفصل (@username أو اسم المجموعة)">{{ '\n'.join(settings.groups or []) }}</textarea>
+                                <div class="input-group">
+                                    <textarea class="form-control" id="groups" rows="4"
+                                              placeholder="ضع كل مجموعة في سطر منفصل (@username أو اسم المجموعة)">{{ '\n'.join(settings.groups or []) }}</textarea>
+                                    <button class="btn btn-outline-secondary" type="button" id="browseGroupsBtn"
+                                            onclick="browseGroups()" title="استعراض المجموعات من الحساب">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
                                 <div class="form-text">
                                     📤 هذه المجموعات للإرسال فقط - المراقبة تشمل كامل الحساب تلقائياً
                                 </div>
@@ -8505,5 +8528,390 @@ document.addEventListener('DOMContentLoaded', function() {
         <span style="background:#ef4444;color:#fff;border-radius:6px;font-size:0.65rem;padding:1px 5px;">🔒</span>
       </button>
     </div>
+
+<!-- ══════════════════ مودال: استعراض المجموعات ══════════════════ -->
+<div class="modal fade" id="browseGroupsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-users me-2"></i>استعراض المجموعات والقنوات</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small">اختر المجموعات التي تريد الإرسال إليها:</span>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="selectAllBrowseGroups(true)">تحديد الكل</button>
+                        <button class="btn btn-sm btn-outline-secondary ms-1" onclick="selectAllBrowseGroups(false)">إلغاء التحديد</button>
+                    </div>
+                </div>
+                <div id="groupsListContainer">
+                    <div class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i> جاري التحميل...</div>
+                </div>
+                <div class="mt-2 small">
+                    <span class="badge bg-info" id="selectedGroupsCount">0</span> مجموعة محددة
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button class="btn btn-primary" onclick="addSelectedGroupsToField()">
+                    <i class="fas fa-plus me-1"></i>إضافة المحددة للحقل
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════ مودال: إدارة روابط الدعوة ══════════════════ -->
+<div class="modal fade" id="inviteManagementModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header" style="background:linear-gradient(135deg,#10b981,#059669);">
+                <h5 class="modal-title"><i class="fas fa-link me-2"></i>إدارة روابط الدعوة (مرة واحدة)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="inviteResultMsg" class="mb-2"></div>
+                <div id="newInviteLinkBox" style="display:none;" class="mb-3 p-2 rounded" style="background:#1a1a3e;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <code id="inviteLinkDisplay" style="color:#4ade80;word-break:break-all;font-size:0.82rem;"></code>
+                        <button class="btn btn-sm btn-outline-info ms-2" onclick="copyInviteLink()">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <p class="small text-muted mt-1 mb-0"><i class="fas fa-info-circle me-1"></i>صالح لمرة واحدة فقط — 7 أيام</p>
+                </div>
+                <button class="btn btn-success w-100 mb-3" onclick="createInviteLink()">
+                    <i class="fas fa-plus me-1"></i>إنشاء رابط دعوة جديد
+                </button>
+                <div id="inviteListContainer">
+                    <div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin me-1"></i> جاري التحميل...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════ مودال: إدارة الإعدادات ══════════════════ -->
+<div class="modal fade" id="settingsManageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="fas fa-database me-2"></i>إدارة الإعدادات</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <button class="btn btn-outline-success w-100" onclick="exportSettings()">
+                            <i class="fas fa-file-export me-1"></i>تصدير (JSON)
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <label class="btn btn-outline-primary w-100 mb-0" for="importFileInput">
+                            <i class="fas fa-file-import me-1"></i>استيراد
+                        </label>
+                        <input type="file" id="importFileInput" accept=".json" style="display:none"
+                               onchange="importSettingsFile(this.files[0]); this.value='';">
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-outline-info w-100" onclick="syncSettingsFromServer()">
+                            <i class="fas fa-sync me-1"></i>مزامنة من الخادم
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-outline-warning w-100" onclick="if(confirm('حذف الإعدادات المحلية؟')){localStorage.clear();location.reload();}">
+                            <i class="fas fa-trash me-1"></i>إعادة تعيين
+                        </button>
+                    </div>
+                </div>
+                <p class="small text-muted mt-3 mb-0"><i class="fas fa-info-circle me-1"></i>الإعدادات تُحفظ في الخادم ومزامنة تلقائياً.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  ① وضع الإرسال (محدد / كل المجموعات)
+// ═══════════════════════════════════════════════════════════════
+var _sendMode = 'specific';
+
+function setSendMode(mode) {
+    _sendMode = mode;
+    var specBtn = document.getElementById('sendSpecificBtn');
+    var allBtn  = document.getElementById('sendAllBtn');
+    var helpTxt = document.getElementById('sendModeText');
+    var grpField = document.getElementById('groups');
+    var browseBtn = document.getElementById('browseGroupsBtn');
+    if (!specBtn) return;
+    if (mode === 'all') {
+        specBtn.classList.remove('active');
+        allBtn.classList.add('active');
+        if (helpTxt) helpTxt.textContent = 'سيتم الإرسال إلى جميع المجموعات والقنوات في حسابك تلقائياً.';
+        if (grpField) { grpField.disabled = true; grpField.style.opacity = '0.5'; }
+        if (browseBtn) browseBtn.style.display = 'none';
+    } else {
+        allBtn.classList.remove('active');
+        specBtn.classList.add('active');
+        if (helpTxt) helpTxt.textContent = 'أدخل روابط المجموعات في الحقل أدناه.';
+        if (grpField) { grpField.disabled = false; grpField.style.opacity = '1'; }
+        if (browseBtn) browseBtn.style.display = 'inline-block';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ② استعراض المجموعات
+// ═══════════════════════════════════════════════════════════════
+async function browseGroups() {
+    var modal = new bootstrap.Modal(document.getElementById('browseGroupsModal'));
+    modal.show();
+    var container = document.getElementById('groupsListContainer');
+    container.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>جاري تحميل المجموعات...</div>';
+    try {
+        var resp = await fetch('/api/get_all_groups');
+        var data = await resp.json();
+        if (!data.success) throw new Error(data.message || 'فشل التحميل');
+        var groups = data.groups || [];
+        if (!groups.length) {
+            container.innerHTML = '<div class="alert alert-info">لم يتم العثور على أي مجموعات أو قنوات.</div>';
+            return;
+        }
+        var html = '<div class="list-group">';
+        groups.forEach(function(g, idx) {
+            var link = g.link || '#';
+            var badge = g.type === 'قناة' ? 'bg-danger' : 'bg-primary';
+            html += '<div class="list-group-item list-group-item-action d-flex align-items-center p-2">' +
+                '<input type="checkbox" class="form-check-input me-2 browse-group-cb" data-link="' + link + '" id="bg_' + idx + '">' +
+                '<label for="bg_' + idx + '" class="flex-grow-1 mb-0" style="cursor:pointer;font-size:0.85rem;">' +
+                '<strong>' + (g.title || '') + '</strong> ' +
+                (g.username ? '<span class="badge bg-secondary">@' + g.username + '</span> ' : '') +
+                '<span class="badge ' + badge + '">' + g.type + '</span>' +
+                '</label>' +
+                (link !== '#' ? '<a href="' + link + '" target="_blank" class="btn btn-sm btn-link p-0 ms-1"><i class="fas fa-external-link-alt fa-xs"></i></a>' : '') +
+                '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+        document.querySelectorAll('.browse-group-cb').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                document.getElementById('selectedGroupsCount').textContent = document.querySelectorAll('.browse-group-cb:checked').length;
+            });
+        });
+    } catch(e) {
+        container.innerHTML = '<div class="alert alert-danger">' + e.message + '</div>';
+    }
+}
+
+function selectAllBrowseGroups(sel) {
+    document.querySelectorAll('.browse-group-cb').forEach(function(cb){ cb.checked = sel; });
+    document.getElementById('selectedGroupsCount').textContent = sel ? document.querySelectorAll('.browse-group-cb').length : 0;
+}
+
+function addSelectedGroupsToField() {
+    var checked = document.querySelectorAll('.browse-group-cb:checked');
+    var links = Array.from(checked).map(function(cb){ return cb.dataset.link; }).filter(function(l){ return l && l !== '#'; });
+    if (!links.length) { alert('❌ لم يتم تحديد أي مجموعة'); return; }
+    var field = document.getElementById('groups');
+    var cur = field.value.trim();
+    field.value = cur ? cur + '\n' + links.join('\n') : links.join('\n');
+    bootstrap.Modal.getInstance(document.getElementById('browseGroupsModal')).hide();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ③ دالة sendNow المطورة (تدعم send_to_all)
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function() {
+    var btn = document.getElementById('sendNowBtn');
+    if (btn && !btn._newHandlerAttached) {
+        btn._newHandlerAttached = true;
+        btn.addEventListener('click', async function() {
+            var message = (document.getElementById('message') || {value:''}).value.trim();
+            var groups  = (document.getElementById('groups')  || {value:''}).value.trim();
+            var sendToAll = (_sendMode === 'all');
+            var hasImages = (window.uploadedImages && window.uploadedImages.length > 0);
+            if (!message && !hasImages) { alert('❌ يجب كتابة رسالة أو رفع صورة'); return; }
+            if (!sendToAll && !groups) { alert('❌ يجب تحديد المجموعات أو اختر "كل المجموعات"'); return; }
+            var orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري الإرسال...';
+            try {
+                var payload = { message: message, groups: groups, images: window.uploadedImages || [], send_to_all: sendToAll };
+                var resp = await fetch('/api/send_now', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                var data = await resp.json();
+                if (data.success) {
+                    alert('✅ ' + data.message);
+                } else {
+                    alert('❌ ' + (data.message || 'خطأ غير معروف'));
+                }
+            } catch(e) {
+                alert('❌ خطأ في الاتصال: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+        });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  ④ إدارة الإعدادات (تصدير / استيراد / مزامنة)
+// ═══════════════════════════════════════════════════════════════
+function exportSettings() { window.location.href = '/api/export_settings'; }
+
+async function importSettingsFile(file) {
+    if (!file || !file.name.endsWith('.json')) { alert('❌ الرجاء اختيار ملف JSON'); return; }
+    var fd = new FormData(); fd.append('file', file);
+    try {
+        var r = await fetch('/api/import_settings', {method:'POST', body:fd});
+        var d = await r.json();
+        if (d.success) { alert('✅ تم الاستيراد بنجاح! سيتم إعادة التحميل.'); location.reload(); }
+        else alert('❌ ' + d.message);
+    } catch(e) { alert('❌ ' + e.message); }
+}
+
+async function syncSettingsFromServer() {
+    try {
+        var r = await fetch('/api/load_backup_settings');
+        var d = await r.json();
+        if (d.success && d.settings && Object.keys(d.settings).length) {
+            alert('✅ تم تحديث الإعدادات من الخادم. سيتم إعادة التحميل.');
+            location.reload();
+        } else {
+            alert('ℹ️ لا توجد إعدادات محفوظة على الخادم');
+        }
+    } catch(e) { alert('❌ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ⑤ إدارة روابط الدعوة
+// ═══════════════════════════════════════════════════════════════
+async function openInviteManagement() {
+    var modal = new bootstrap.Modal(document.getElementById('inviteManagementModal'));
+    modal.show();
+    loadInvitesList();
+}
+
+async function loadInvitesList() {
+    var cont = document.getElementById('inviteListContainer');
+    if (!cont) return;
+    cont.innerHTML = '<div class="text-center py-2"><i class="fas fa-spinner fa-spin me-1"></i>جاري التحميل...</div>';
+    try {
+        var r = await fetch('/admin/api/invites');
+        var d = await r.json();
+        if (!d.success) { cont.innerHTML = '<p class="text-danger small">' + d.message + '</p>'; return; }
+        var tokens = d.tokens || [];
+        if (!tokens.length) { cont.innerHTML = '<p class="text-muted text-center small py-2">لا توجد روابط دعوة</p>'; return; }
+        var statusMap = {active:'🟢 نشط', used:'🔵 مستخدم', expired:'🔴 منتهي'};
+        var html = '<div class="table-responsive"><table class="table table-dark table-sm table-hover" style="font-size:0.75rem;"><thead><tr><th>الرمز</th><th>الحالة</th><th>التاريخ</th><th>إجراء</th></tr></thead><tbody>';
+        tokens.forEach(function(t) {
+            var st = statusMap[t.status] || t.status;
+            html += '<tr><td><code style="color:#fbbf24;font-size:0.68rem;">' + t.token.slice(0,10) + '...</code></td>' +
+                    '<td>' + st + '</td>' +
+                    '<td style="font-size:0.68rem;">' + (t.created_at||'').slice(0,10) + '</td>' +
+                    '<td>' +
+                    (t.status==='active' ? '<button class="btn btn-danger btn-sm py-0 px-1 me-1" onclick="revokeInvite(\'' + t.token + '\')" style="font-size:0.65rem;">إلغاء</button>' : '') +
+                    '<button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteInvite(\'' + t.token + '\')" style="font-size:0.65rem;">🗑️</button>' +
+                    '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+        cont.innerHTML = html;
+    } catch(e) { cont.innerHTML = '<p class="text-danger small">خطأ: ' + e.message + '</p>'; }
+}
+
+async function createInviteLink() {
+    var resDiv = document.getElementById('inviteResultMsg');
+    if(resDiv) resDiv.innerHTML = '<div class="alert alert-info py-1 small"><i class="fas fa-spinner fa-spin me-1"></i>جاري الإنشاء...</div>';
+    try {
+        var r = await fetch('/admin/api/create_invite', {method:'POST'});
+        var d = await r.json();
+        if (d.success) {
+            document.getElementById('inviteLinkDisplay').textContent = d.link;
+            document.getElementById('newInviteLinkBox').style.display = 'block';
+            if(resDiv) resDiv.innerHTML = '<div class="alert alert-success py-1 small">✅ تم إنشاء الرابط</div>';
+            loadInvitesList();
+        } else {
+            if(resDiv) resDiv.innerHTML = '<div class="alert alert-danger py-1 small">❌ ' + d.message + '</div>';
+        }
+    } catch(e) { if(resDiv) resDiv.innerHTML = '<div class="alert alert-danger py-1 small">❌ ' + e.message + '</div>'; }
+}
+
+function copyInviteLink() {
+    var txt = document.getElementById('inviteLinkDisplay').textContent;
+    navigator.clipboard.writeText(txt).then(function(){ alert('✅ تم نسخ الرابط'); }).catch(function(){
+        var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); alert('✅ تم النسخ');
+    });
+}
+
+async function revokeInvite(token) {
+    if (!confirm('إلغاء هذا الرابط؟')) return;
+    var r = await fetch('/admin/api/revoke_invite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token})});
+    var d = await r.json();
+    if(d.success) loadInvitesList(); else alert('❌ ' + d.message);
+}
+
+async function deleteInvite(token) {
+    if (!confirm('حذف هذا الرابط نهائياً؟')) return;
+    var r = await fetch('/admin/api/delete_invite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token})});
+    var d = await r.json();
+    if(d.success) loadInvitesList(); else alert('❌ ' + d.message);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ⑥ TTS — نطق الإشعارات بالعربية
+// ═══════════════════════════════════════════════════════════════
+var _ttsEnabled = localStorage.getItem('tts_enabled') === '1';
+
+function speakArabic(text) {
+    if (!_ttsEnabled) return;
+    try {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        var utt = new SpeechSynthesisUtterance(text);
+        utt.lang = 'ar-SA';
+        utt.rate = 1.0;
+        utt.pitch = 1.0;
+        var voices = window.speechSynthesis.getVoices();
+        var arVoice = voices.find(function(v){ return v.lang && v.lang.startsWith('ar'); });
+        if (arVoice) utt.voice = arVoice;
+        window.speechSynthesis.speak(utt);
+    } catch(e) {}
+}
+
+function toggleTTS() {
+    _ttsEnabled = !_ttsEnabled;
+    localStorage.setItem('tts_enabled', _ttsEnabled ? '1' : '0');
+    var btn = document.getElementById('ttsBtnToggle');
+    if (btn) {
+        btn.title = _ttsEnabled ? 'إيقاف النطق' : 'تفعيل النطق';
+        btn.innerHTML = _ttsEnabled ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-mute"></i>';
+    }
+    if (_ttsEnabled) speakArabic('تم تفعيل النطق الصوتي للإشعارات');
+}
+
+// تكامل TTS مع الإشعارات الجديدة
+document.addEventListener('DOMContentLoaded', function() {
+    // إعادة تعريف showAlert لدعم TTS
+    var origShowAlert = window.showAlert;
+    if (typeof origShowAlert === 'function') {
+        window.showAlert = function(msg, type) {
+            origShowAlert(msg, type);
+            speakArabic(msg.replace(/<[^>]*>/g,''));
+        };
+    }
+    // TTS لإشعارات البث
+    if (window.socket) {
+        window.socket.on('new_broadcast_notification', function(n) {
+            speakArabic(n.message || '');
+        });
+    }
+    // زر تفعيل النطق
+    var ttsBtn = document.getElementById('ttsBtnToggle');
+    if (ttsBtn) {
+        ttsBtn.innerHTML = _ttsEnabled ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-mute"></i>';
+        ttsBtn.title = _ttsEnabled ? 'إيقاف النطق' : 'تفعيل النطق';
+    }
+});
+</script>
 </body>
 </html>
