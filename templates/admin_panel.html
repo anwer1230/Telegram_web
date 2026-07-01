@@ -942,6 +942,40 @@
                     </div>
                 </div>
 
+                <!-- ══════════ إدارة الإعدادات ══════════ -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <i class="fas fa-database" style="color:var(--indigo);"></i>
+                            إدارة الإعدادات
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                            <button class="btn-sm-green" onclick="adminExportSettings()">
+                                <i class="fas fa-file-export me-1"></i>تصدير (JSON)
+                            </button>
+                            <label class="btn-sm-blue" style="margin:0;cursor:pointer;" for="adminImportFileInput">
+                                <i class="fas fa-file-import me-1"></i>استيراد
+                            </label>
+                            <input type="file" id="adminImportFileInput" accept=".json" style="display:none"
+                                   onchange="adminImportSettingsFile(this.files[0]); this.value='';">
+                            <button class="btn-sm-yellow" onclick="adminSyncSettingsFromServer()">
+                                <i class="fas fa-sync me-1"></i>مزامنة من الخادم
+                            </button>
+                            <button onclick="if(confirm('حذف الإعدادات المحلية وإعادة التحميل؟')){localStorage.clear();location.reload();}"
+                                    style="background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);
+                                           padding:8px 12px;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">
+                                <i class="fas fa-trash me-1"></i>إعادة تعيين
+                            </button>
+                        </div>
+                        <div id="settingsMgmtMsg" style="font-size:0.78rem;color:var(--muted);"></div>
+                        <p style="font-size:0.75rem;color:var(--muted);margin:8px 0 0;border-top:1px solid rgba(99,102,241,0.1);padding-top:8px;">
+                            <i class="fas fa-info-circle me-1"></i>الإعدادات تُحفظ في الخادم ومزامنة تلقائياً.
+                        </p>
+                    </div>
+                </div>
+
             </div>
 
         </div>
@@ -1823,6 +1857,55 @@ async function adminDeleteInvite(token) {
 function adminCopyTokenLink(token) {
     var link = window.location.origin + '/?invite=' + token;
     navigator.clipboard.writeText(link).then(() => alert('✅ تم نسخ رابط الدعوة')).catch(() => { alert(link); });
+}
+
+// ══════════════════════════════════════════════════════════
+//  إدارة الإعدادات
+// ══════════════════════════════════════════════════════════
+function adminExportSettings() {
+    window.location.href = '/api/export_settings';
+}
+
+async function adminImportSettingsFile(file) {
+    if (!file || !file.name.endsWith('.json')) {
+        showToast('❌ الرجاء اختيار ملف JSON', 'error'); return;
+    }
+    var msg = document.getElementById('settingsMgmtMsg');
+    if (msg) msg.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>جاري الاستيراد...';
+    var fd = new FormData(); fd.append('file', file);
+    try {
+        var r = await fetch('/api/import_settings', {method:'POST', body:fd});
+        var d = await r.json();
+        if (d.success) {
+            showToast('✅ تم الاستيراد بنجاح! جاري إعادة التحميل...', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            if (msg) msg.innerHTML = '';
+            showToast('❌ ' + (d.message || 'فشل الاستيراد'), 'error');
+        }
+    } catch(e) {
+        if (msg) msg.innerHTML = '';
+        showToast('❌ ' + e.message, 'error');
+    }
+}
+
+async function adminSyncSettingsFromServer() {
+    var msg = document.getElementById('settingsMgmtMsg');
+    if (msg) msg.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>جاري المزامنة...';
+    try {
+        var r = await fetch('/api/load_backup_settings');
+        var d = await r.json();
+        if (msg) msg.innerHTML = '';
+        if (d.success && d.settings && Object.keys(d.settings).length) {
+            showToast('✅ تم تحديث الإعدادات من الخادم. جاري إعادة التحميل...', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('ℹ️ لا توجد إعدادات محفوظة على الخادم', 'info');
+        }
+    } catch(e) {
+        if (msg) msg.innerHTML = '';
+        showToast('❌ ' + e.message, 'error');
+    }
 }
 
 // ══════════════════════════════════════════════════════════
