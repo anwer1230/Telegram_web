@@ -14283,6 +14283,7 @@ def generate_vouchers(plan_id, count=10):
         normalized = raw.replace("-", "").upper()
         hashed = hashlib.sha256(normalized.encode()).hexdigest()
         data["vouchers"].append({
+            "code": raw,
             "code_hash": hashed,
             "plan_id": plan_id,
             "plan_name": plan["name"],
@@ -14527,6 +14528,210 @@ def admin_delete_vouchers():
     save_cards_data(cards)
     return jsonify({"success": True})
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ▸ نظام تقييد الوظائف (Feature Restrictions) + نظام Pro بالبطاقات
+# ══════════════════════════════════════════════════════════════════════════════
+
+FEATURE_RESTRICTIONS_FILE = os.path.join(DATA_DIR, "feature_restrictions.json")
+FEATURE_VOUCHERS_FILE     = os.path.join(DATA_DIR, "feature_vouchers.json")
+_FR_LOCK = threading.Lock()
+_FV_LOCK = threading.Lock()
+
+FEATURE_LABELS = {
+    "learning":             "نظام التعلم الذكي",
+    "rotating":             "النشر الدوري المتسلسل",
+    "group_search":         "البحث في روابطي",
+    "auto_join":            "الانضمام المتقدم",
+    "auto_replies":         "الردود التلقائية",
+    "saved_links":          "الروابط المحفوظة",
+    "academic":             "التحليل الأكاديمي الذكي",
+    "formatter_pdf2word":   "تحويل PDF إلى Word",
+    "formatter_html2word":  "تحويل HTML إلى Word",
+    "formatter_html2excel": "تحويل HTML إلى Excel",
+    "formatter_html2ppt":   "تحويل HTML إلى PPT",
+    "link_finder":          "محرك البحث عن الروابط",
+    "message_sending":      "إرسال الرسائل",
+    "monitoring":           "مراقبة المجموعات",
+    "scan_groups":          "مسح المجموعات",
+}
+
+def load_feature_restrictions():
+    with _FR_LOCK:
+        try:
+            if os.path.exists(FEATURE_RESTRICTIONS_FILE):
+                with open(FEATURE_RESTRICTIONS_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {"enabled": False, "restricted": []}
+
+def save_feature_restrictions(data):
+    with _FR_LOCK:
+        try:
+            with open(FEATURE_RESTRICTIONS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"save_feature_restrictions: {e}")
+
+def load_feature_vouchers():
+    with _FV_LOCK:
+        try:
+            if os.path.exists(FEATURE_VOUCHERS_FILE):
+                with open(FEATURE_VOUCHERS_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {k: {"users": []} for k in FEATURE_LABELS}
+
+def save_feature_vouchers(data):
+    with _FV_LOCK:
+        try:
+            with open(FEATURE_VOUCHERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"save_feature_vouchers: {e}")
+
+# ── alias routes للتوافق مع admin_panel.html ──────────────────────────────
+
+@app.route("/admin/api/card_system_status", methods=["GET"])
+def admin_card_system_status():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    data = load_cards_data()
+    enabled = data.get("card_system_enabled", False)
+    total = len(data.get("vouchers", []))
+    active_sessions = len(data.get("active_card_sessions", []))
+    unused = sum(1 for v in data.get("vouchers", []) if v.get("status") == "unused")
+    return jsonify({
+        "success": True,
+        "enabled": enabled,
+        "stats": {"total": total, "unused": unused, "active_sessions": active_sessions}
+    })
+
+@app.route("/admin/api/list_vouchers", methods=["GET"])
+def admin_list_vouchers_alias():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    data = load_cards_data()
+    result = []
+    for v in data.get("vouchers", []):
+        result.append({
+            "code": v.get("code") or (v.get("code_hash", "")[:12] + "***"),
+            "plan_name": v.get("plan_name", "—"),
+            "status": v.get("status", "unknown"),
+            "used": v.get("status") in ("used", "expired"),
+            "created_at": (v.get("created_at") or "")[:10],
+            "expires_at": (v.get("expires_at") or "")[:16],
+        })
+    return jsonify({"success": True, "vouchers": result})
+
+@app.route("/admin/api/delete_used_vouchers", methods=["POST"])
+def admin_delete_used_vouchers():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    cards = load_cards_data()
+    before = len(cards["vouchers"])
+    cards["vouchers"] = [v for v in cards["vouchers"] if v.get("status") not in ("used", "expired")]
+    deleted = before - len(cards["vouchers"])
+    save_cards_data(cards)
+    return jsonify({"success": True, "deleted": deleted, "message": f"تم حذف {deleted} كرت"})
+
+# ── Feature Restrictions API ───────────────────────────────────────────────
+
+@app.route("/api/feature_restrictions", methods=["GET"])
+def api_feature_restrictions_public():
+    r = load_feature_restrictions()
+    return jsonify({"success": True, "enabled": r.get("enabled", False), "restricted": r.get("restricted", [])})
+
+@app.route("/admin/api/feature_restrictions", methods=["GET", "POST"])
+def admin_feature_restrictions():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    if request.method == "POST":
+        data = request.json or {}
+        r = load_feature_restrictions()
+        if "enabled" in data:
+            r["enabled"] = bool(data["enabled"])
+        if "restricted" in data:
+            r["restricted"] = [f for f in data["restricted"] if f in FEATURE_LABELS]
+        save_feature_restrictions(r)
+        return jsonify({"success": True, "message": "✅ تم حفظ إعدادات التقييد", "data": r})
+    r = load_feature_restrictions()
+    return jsonify({
+        "success": True,
+        "enabled": r.get("enabled", False),
+        "restricted": r.get("restricted", []),
+        "available_features": FEATURE_LABELS
+    })
+
+# ── Feature Vouchers (Pro unlock) API ─────────────────────────────────────
+
+@app.route("/api/feature_status", methods=["GET"])
+def api_feature_status():
+    user_id = session.get("uid", "")
+    r = load_feature_restrictions()
+    fv = load_feature_vouchers()
+    result = {}
+    for feature in FEATURE_LABELS:
+        sys_restricted = r.get("enabled", False) and feature in r.get("restricted", [])
+        has_access = bool(user_id) and user_id in fv.get(feature, {}).get("users", [])
+        result[feature] = {
+            "restricted": sys_restricted and not has_access,
+            "unlocked": has_access,
+        }
+    return jsonify({"success": True, "features": result})
+
+@app.route("/api/unlock_feature", methods=["POST"])
+def api_unlock_feature():
+    user_id = session.get("uid", "")
+    if not user_id:
+        return jsonify({"success": False, "message": "❌ يجب تسجيل الدخول أولاً"}), 401
+    data = request.json or {}
+    feature = data.get("feature", "").strip()
+    code = data.get("code", "").strip()
+    if not feature or feature not in FEATURE_LABELS:
+        return jsonify({"success": False, "message": "❌ وظيفة غير معروفة"})
+    if not code:
+        return jsonify({"success": False, "message": "❌ أدخل كود التفعيل"})
+    result, err = validate_voucher(code)
+    if err:
+        return jsonify({"success": False, "message": err})
+    fv = load_feature_vouchers()
+    fv.setdefault(feature, {"users": []})
+    if user_id not in fv[feature]["users"]:
+        fv[feature]["users"].append(user_id)
+        save_feature_vouchers(fv)
+    return jsonify({
+        "success": True,
+        "message": f"✅ تم فتح {FEATURE_LABELS.get(feature, feature)} بنجاح!"
+    })
+
+@app.route("/admin/api/feature_vouchers", methods=["GET", "POST"])
+def admin_feature_vouchers():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    if request.method == "POST":
+        data = request.json or {}
+        action = data.get("action", "update")
+        feature = data.get("feature", "")
+        if not feature or feature not in FEATURE_LABELS:
+            return jsonify({"success": False, "message": "وظيفة غير موجودة"})
+        fv = load_feature_vouchers()
+        fv.setdefault(feature, {"users": []})
+        if action == "reset":
+            fv[feature]["users"] = []
+        else:
+            users = [u for u in data.get("users", []) if u]
+            fv[feature]["users"] = users
+        save_feature_vouchers(fv)
+        return jsonify({"success": True, "message": f"✅ تم تحديث {FEATURE_LABELS[feature]}"})
+    fv = load_feature_vouchers()
+    result = {}
+    for feature, label in FEATURE_LABELS.items():
+        d = fv.get(feature, {"users": []})
+        result[feature] = {"label": label, "users": d.get("users", []), "user_count": len(d.get("users", []))}
+    return jsonify({"success": True, "features": result})
 
 # ─── مسارات نظام التحديث الذاتي ──────────────────────────────────────────
 
