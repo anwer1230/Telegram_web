@@ -597,17 +597,53 @@
                         </div>
                     </div>
                     <div class="panel-body">
-                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
                             <select id="cardPlan" class="field" style="flex:1;min-width:160px;">
                                 <option value="daily">يومي (24 ساعة)</option>
                                 <option value="weekly">أسبوعي (7 أيام)</option>
                                 <option value="monthly">شهري (30 يوم)</option>
                                 <option value="unlimited">دائم</option>
                             </select>
-                            <input type="number" id="cardCount" class="field" style="width:100px;"
+                            <input type="number" id="cardCount" class="field" style="width:90px;"
                                    value="5" min="1" max="100" placeholder="العدد">
                             <button class="btn-primary-act" onclick="createVouchers()">
                                 <i class="fas fa-magic"></i>إنشاء
+                            </button>
+                        </div>
+                        <!-- اختيار الوظائف التي تفتحها البطاقة -->
+                        <div style="margin-bottom:10px;">
+                            <div style="font-size:0.75rem;color:var(--muted);margin-bottom:5px;">
+                                <i class="fas fa-unlock-alt me-1"></i>الوظائف التي تفتحها هذه البطاقة (اختياري — اتركها فارغة لبطاقة دخول فقط)
+                            </div>
+                            <div id="voucherFeaturesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:5px;">
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="learning"> 🧠 نظام التعلم الذكي</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="rotating"> 🔄 النشر الدوري</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="group_search"> 🔍 البحث في روابطي</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="auto_join"> 🤖 الانضمام المتقدم</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="auto_replies"> 💬 الردود التلقائية</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="academic"> 📚 التحليل الأكاديمي</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="message_sending"> 📨 إرسال الرسائل</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="monitoring"> 👁️ مراقبة المجموعات</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="link_finder"> 🕵️ محرك البحث</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="saved_links"> 🔗 الروابط المحفوظة</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="formatter_pdf2word"> 📄 PDF→Word</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.05);">
+                                    <input type="checkbox" name="voucherFeature" value="scan_groups"> 📡 مسح المجموعات</label>
+                            </div>
+                            <button onclick="document.querySelectorAll('input[name=voucherFeature]').forEach(c=>c.checked=!c.checked)"
+                                    style="margin-top:6px;font-size:0.72rem;background:transparent;color:var(--muted);border:none;cursor:pointer;padding:0;">
+                                ↔️ عكس الاختيار
                             </button>
                         </div>
                         <div id="cardCreateResult" style="font-size:0.82rem;"></div>
@@ -628,7 +664,7 @@
                             <button class="btn-sm-green" onclick="window.open('/admin/api/export_vouchers_pdf','_blank')" title="طباعة / PDF">
                                 <i class="fas fa-file-pdf"></i>PDF
                             </button>
-                            <button class="btn-sm-act" onclick="window.location.href='/admin/api/export_vouchers_txt'" title="تصدير نصي">
+                            <button class="btn-sm-act" onclick="window.location.href='/admin/api/export_vouchers_txt_fixed'" title="تصدير نصي منسّق">
                                 <i class="fas fa-file-alt"></i>TXT
                             </button>
                             <button class="btn-sm-red" onclick="deleteUsedVouchers()">
@@ -1322,25 +1358,63 @@ async function loadFrData() {
             btnEn.style.display = ''; btnDis.style.display = 'none';
         }
         const features = d.available_features || {};
-        const restricted = d.restricted || [];
+        const globalRestr = d.global_restricted || d.restricted || [];
+        const userRestr   = d.user_restrictions || {};
+        const userUnlocked= d.user_unlocked || {};
+
         const el = document.getElementById('frFeaturesList');
-        el.innerHTML = Object.entries(features).map(([key, label]) => `
-            <label style="display:flex;align-items:center;gap:8px;background:rgba(30,40,60,0.6);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:8px 12px;cursor:pointer;">
-                <input type="checkbox" id="fr_${key}" value="${key}" ${restricted.includes(key)?'checked':''} style="width:16px;height:16px;accent-color:#f59e0b;">
+        // القسم الأول: الوظائف مع تقييد عام
+        let html = `<div style="font-size:0.75rem;color:var(--muted);margin-bottom:8px;font-weight:600;">
+            🌐 تقييد عام (يطبّق على كل المستخدمين، يمكن فتحه ببطاقة)
+        </div>`;
+        html += Object.entries(features).map(([key, label]) => `
+            <label style="display:flex;align-items:center;gap:8px;background:rgba(30,40,60,0.6);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:8px 12px;cursor:pointer;margin-bottom:4px;">
+                <input type="checkbox" class="fr-global-cb" id="fr_${key}" value="${key}" ${globalRestr.includes(key)?'checked':''} style="width:16px;height:16px;accent-color:#f59e0b;">
                 <span style="font-size:0.82rem;color:#e2e8f0;">${label}</span>
-                <span style="margin-right:auto;background:#f59e0b;color:#000;border-radius:4px;padding:1px 5px;font-size:0.65rem;font-weight:700;opacity:${restricted.includes(key)?'1':'0.3'};">PRO</span>
+                <span style="margin-right:auto;background:#f59e0b;color:#000;border-radius:4px;padding:1px 5px;font-size:0.65rem;font-weight:700;opacity:${globalRestr.includes(key)?'1':'0.3'};">PRO</span>
             </label>
         `).join('');
+
+        // القسم الثاني: تقييد خاص بكل مستخدم
+        const userLabels = {
+            user_1:'المستخدم الأول', user_2:'المستخدم الثاني',
+            user_3:'المستخدم الثالث', user_4:'المستخدم الرابع', user_5:'المستخدم الخامس'
+        };
+        html += `<div style="font-size:0.75rem;color:var(--muted);margin:14px 0 8px;font-weight:600;">
+            👤 تقييد خاص بمستخدم (أو تعطيل حسابه بالكامل)
+        </div>`;
+        for (const [uid, uname] of Object.entries(userLabels)) {
+            const urestr = userRestr[uid] || [];
+            const allDisabled = urestr.includes('all');
+            const unlocked = userUnlocked[uid] || [];
+            html += `<div style="background:rgba(30,40,60,0.6);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:10px 14px;margin-bottom:6px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <span style="font-size:0.82rem;color:#e2e8f0;font-weight:600;">${uname}</span>
+                    <label style="display:flex;align-items:center;gap:5px;font-size:0.75rem;cursor:pointer;">
+                        <input type="checkbox" class="fr-user-all-cb" data-uid="${uid}"
+                               ${allDisabled?'checked':''} style="accent-color:#ef4444;">
+                        <span style="color:#fca5a5;">تعطيل الحساب بالكامل</span>
+                    </label>
+                    <span style="margin-right:auto;font-size:0.7rem;color:#6ee7b7;">مفتوح: ${unlocked.length ? unlocked.join(', ') : '—'}</span>
+                    <button onclick="clearUserUnlocked('${uid}')"
+                            style="font-size:0.68rem;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);border-radius:5px;padding:2px 8px;cursor:pointer;">
+                        مسح الصلاحيات
+                    </button>
+                </div>
+            </div>`;
+        }
+        el.innerHTML = html;
     } catch(e) { console.error(e); }
 }
 
 async function setFeatureRestrict(enabled) {
     try {
-        const restricted = _frData.restricted || [];
+        const globalRestr = _frData ? (_frData.global_restricted || _frData.restricted || []) : [];
+        const userRestr   = _frData ? (_frData.user_restrictions || {}) : {};
         const r = await fetch('/admin/api/feature_restrictions', {
             method:'POST', credentials:'same-origin',
             headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({enabled, restricted})
+            body: JSON.stringify({enabled, global_restricted: globalRestr, user_restrictions: userRestr})
         });
         const d = await r.json();
         if (d.success) { showToast(d.message); await loadFrData(); }
@@ -1348,19 +1422,41 @@ async function setFeatureRestrict(enabled) {
 }
 
 async function saveFrRestrictions() {
-    const checkboxes = document.querySelectorAll('#frFeaturesList input[type=checkbox]');
-    const restricted = [...checkboxes].filter(c => c.checked).map(c => c.value);
-    const enabled = (document.getElementById('frSysStatus').textContent || '').includes('مفعّل');
+    const globalCbs  = document.querySelectorAll('.fr-global-cb');
+    const globalRestr = [...globalCbs].filter(c => c.checked).map(c => c.value);
+    const userAllCbs = document.querySelectorAll('.fr-user-all-cb');
+    const userRestr  = {};
+    userAllCbs.forEach(cb => {
+        if (cb.checked) userRestr[cb.dataset.uid] = ['all'];
+    });
+    const enabled = (_frData && _frData.enabled) ||
+                    (document.getElementById('frSysStatus').textContent || '').includes('مفعّل');
     try {
         const r = await fetch('/admin/api/feature_restrictions', {
             method:'POST', credentials:'same-origin',
             headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({enabled, restricted})
+            body: JSON.stringify({enabled, global_restricted: globalRestr, user_restrictions: userRestr})
         });
         const d = await r.json();
         showToast(d.success ? d.message : '❌ ' + d.message);
         if (d.success) await loadFrData();
     } catch(e) { showToast('❌ خطأ في الاتصال'); }
+}
+
+async function clearUserUnlocked(uid) {
+    if (!confirm(`مسح جميع صلاحيات البطاقة للمستخدم ${uid}؟`)) return;
+    const r = await fetch('/admin/api/feature_restrictions', {credentials:'same-origin'});
+    const d = await r.json();
+    if (!d.success) return;
+    const unlocked = d.user_unlocked || {};
+    delete unlocked[uid];
+    await fetch('/admin/api/feature_restrictions', {
+        method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({user_unlocked: unlocked})
+    });
+    showToast('✅ تم مسح الصلاحيات');
+    await loadFrData();
 }
 
 // ── Feature Vouchers (Pro Users) ──
@@ -1422,29 +1518,55 @@ async function resetFvFeature(key) {
 }
 
 async function createVouchers() {
-    const plan  = document.getElementById('cardPlan').value;
-    const count = parseInt(document.getElementById('cardCount').value) || 1;
-    const res   = document.getElementById('cardCreateResult');
-    res.innerHTML = '<span style="color:var(--indigo);"><i class="fas fa-spinner fa-spin me-1"></i>جاري الإنشاء...</span>';
+    const plan     = document.getElementById('cardPlan').value;
+    const count    = parseInt(document.getElementById('cardCount').value) || 1;
+    const features = [...document.querySelectorAll('input[name=voucherFeature]:checked')].map(c => c.value);
+    const res      = document.getElementById('cardCreateResult');
+    res.innerHTML  = '<span style="color:var(--indigo);"><i class="fas fa-spinner fa-spin me-1"></i>جاري الإنشاء...</span>';
     try {
         const r = await fetch('/admin/api/create_vouchers', {
             method:'POST', credentials:'same-origin',
             headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({plan, count})
+            body: JSON.stringify({plan, count, features})
         });
         const d = await r.json();
         if (d.success) {
+            const featLabel = features.length ? `<br><small style="color:#a5b4fc;">🔓 تفتح: ${features.join(', ')}</small>` : '';
+            const codesText = (d.codes || []).join('\n');
             res.innerHTML = `<div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;padding:10px 14px;border-radius:10px;font-size:0.82rem;margin-top:8px;">
-                <strong>✅ تم إنشاء ${count} كرت (${plan})</strong><br>
-                <div style="margin-top:6px;font-family:'Courier New',monospace;font-size:0.75rem;line-height:2;">
-                    ${(d.codes || []).map(c => `<span style="background:rgba(99,102,241,0.15);padding:2px 8px;border-radius:4px;display:inline-block;margin:2px;">${c}</span>`).join('')}
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <strong>✅ تم إنشاء ${count} كرت (${plan})${featLabel}</strong>
+                    <button onclick="copyVouchers()" style="background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4);border-radius:6px;padding:4px 12px;font-size:0.75rem;cursor:pointer;">
+                        <i class="fas fa-copy me-1"></i>نسخ الكل
+                    </button>
                 </div>
+                <textarea id="voucherCodesText" readonly style="width:100%;background:rgba(0,0,0,0.3);color:#6ee7b7;border:1px solid rgba(99,102,241,0.2);border-radius:6px;padding:8px;font-family:'Courier New',monospace;font-size:0.75rem;min-height:90px;resize:vertical;">${codesText}</textarea>
             </div>`;
             await loadVouchers();
         } else {
             res.innerHTML = `<span style="color:#fca5a5;">❌ ${d.message}</span>`;
         }
     } catch(e) { res.innerHTML = '<span style="color:#fca5a5;">❌ خطأ في الاتصال</span>'; }
+}
+
+async function copyVouchers() {
+    const ta = document.getElementById('voucherCodesText');
+    if (!ta || !ta.value) { showToast('⚠️ لا توجد أكواد للنسخ'); return; }
+    try {
+        await navigator.clipboard.writeText(ta.value);
+        showToast('✅ تم نسخ الأكواد إلى الحافظة');
+    } catch(e) {
+        ta.select(); document.execCommand('copy');
+        showToast('✅ تم النسخ');
+    }
+    // إرسال نسخة كإشعار فوري
+    try {
+        await fetch('/admin/api/send_vouchers_notification', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({text: ta.value})
+        });
+    } catch(e) { console.warn('voucher notification:', e); }
 }
 
 async function deleteUsedVouchers() {
