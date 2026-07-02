@@ -4429,6 +4429,7 @@ def api_get_account_info():
             avatar_file = os.path.join(SESSIONS_DIR, 'avatars', f"{user_id}.jpg")
             if os.path.exists(avatar_file) and os.path.getsize(avatar_file) > 0:
                 cached["account_avatar"] = f"/api/account_avatar/{user_id}"
+        cached["is_pro"] = is_user_restricted(user_id)
         return jsonify({
             "success": True,
             "user_id": user_id,
@@ -4528,11 +4529,13 @@ def api_switch_user():
             if os.path.exists(avatar_file) and os.path.getsize(avatar_file) > 0:
                 account_avatar = f"/api/account_avatar/{new_user_id}"
 
+        is_pro = is_user_restricted(new_user_id)
         return jsonify({
             "success": True,
             "message": f"✅ تم التبديل إلى {PREDEFINED_USERS[new_user_id]['name']}" + (f" — حساب تليجرام: {account_name}" if account_name else ""),
             "switched": old_user_id != new_user_id,
             "previous_user_id": old_user_id,
+            "is_pro": is_pro,
             "user": {
                 "id": new_user_id,
                 "name": PREDEFINED_USERS[new_user_id]['name'],
@@ -4540,7 +4543,8 @@ def api_switch_user():
                 "color": PREDEFINED_USERS[new_user_id]['color'],
                 "account_name": account_name,
                 "account_avatar": account_avatar,
-                "authenticated": USERS[new_user_id].get('authenticated', False)
+                "authenticated": USERS[new_user_id].get('authenticated', False),
+                "is_pro": is_pro
             },
             "account_name": account_name,
             "account_avatar": account_avatar,
@@ -14271,12 +14275,14 @@ def save_cards_data(data):
         except Exception as e:
             logger.error(f"Error saving cards data: {e}")
 
-def generate_vouchers(plan_id, count=10):
-    """إنشاء قسائم بطاقات جديدة"""
+def generate_vouchers(plan_id, count=10, allowed_features=None):
+    """إنشاء قسائم بطاقات جديدة مع تحديد الوظائف التي تفتحها"""
     data = load_cards_data()
     plan = next((p for p in data["plans"] if p["id"] == plan_id), None)
     if not plan:
         raise ValueError("الخطة غير موجودة")
+    if allowed_features is None:
+        allowed_features = []
     codes = []
     for _ in range(count):
         raw = f"{secrets.token_hex(3).upper()}-{secrets.token_hex(3).upper()}"
@@ -14287,6 +14293,7 @@ def generate_vouchers(plan_id, count=10):
             "code_hash": hashed,
             "plan_id": plan_id,
             "plan_name": plan["name"],
+            "allowed_features": allowed_features,
             "status": "unused",
             "created_at": datetime.now().isoformat(),
             "used_at": None,
@@ -14341,11 +14348,29 @@ def activate_card_voucher(code, client_ip="0.0.0.0"):
             break
     data["active_card_sessions"].append(new_session)
     save_cards_data(data)
+
+    # تطبيق الوظائف المفتوحة (allowed_features) على المستخدم الحالي
+    allowed = voucher.get("allowed_features", [])
+    if allowed:
+        try:
+            user_id = session.get('user_id', 'user_1')
+            feat_data = load_feature_restrictions()
+            unlocked = feat_data.get("user_unlocked", {}).get(user_id, [])
+            for f in allowed:
+                if f not in unlocked:
+                    unlocked.append(f)
+            feat_data.setdefault("user_unlocked", {})[user_id] = unlocked
+            save_feature_restrictions(feat_data)
+            logger.info(f"✅ فُتحت الوظائف {allowed} للمستخدم {user_id} عبر البطاقة")
+        except Exception as _fe:
+            logger.error(f"activate_card_voucher features error: {_fe}")
+
     return {
         "success": True,
         "session_id": session_id,
         "expires_at": expires_at.isoformat(),
         "plan_name": plan["name"],
+        "unlocked_features": allowed,
         "message": f"✅ تم الدخول بنجاح - باقة {plan['name']}"
     }
 
@@ -14464,9 +14489,10 @@ def admin_create_vouchers():
     data = request.json or {}
     plan_id = int(data.get("plan_id", 1))
     count = min(int(data.get("count", 10)), 200)
+    features = [f for f in data.get("features", []) if f in FEATURE_LABELS]
     try:
-        codes = generate_vouchers(plan_id, count)
-        return jsonify({"success": True, "codes": codes, "count": len(codes)})
+        codes = generate_vouchers(plan_id, count, allowed_features=features)
+        return jsonify({"success": True, "codes": codes, "count": len(codes), "features": features})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 
@@ -14556,15 +14582,45 @@ FEATURE_LABELS = {
     "scan_groups":          "مسح المجموعات",
 }
 
+# قائمة كاملة للتقييد: الوظائف + المستخدمون الخمسة
+RESTRICTED_FEATURES_LIST = [
+    {"id": "learning",            "name": "🧠 نظام التعلم الذكي"},
+    {"id": "rotating",            "name": "🔄 النشر الدوري المتسلسل"},
+    {"id": "group_search",        "name": "🔍 البحث في روابطي"},
+    {"id": "auto_join",           "name": "🤖 الانضمام المتقدم"},
+    {"id": "auto_replies",        "name": "💬 الردود التلقائية"},
+    {"id": "saved_links",         "name": "🔗 الروابط المحفوظة"},
+    {"id": "academic",            "name": "📚 التحليل الأكاديمي الذكي"},
+    {"id": "formatter_pdf2word",  "name": "📄 تحويل PDF إلى Word"},
+    {"id": "formatter_html2word", "name": "📝 تحويل HTML إلى Word"},
+    {"id": "formatter_html2excel","name": "📊 تحويل HTML إلى Excel"},
+    {"id": "formatter_html2ppt",  "name": "🎞️ تحويل HTML إلى PPT"},
+    {"id": "link_finder",         "name": "🕵️ محرك البحث عن الروابط"},
+    {"id": "message_sending",     "name": "📨 إرسال الرسائل"},
+    {"id": "monitoring",          "name": "👁️ مراقبة المجموعات"},
+    {"id": "scan_groups",         "name": "📡 مسح المجموعات"},
+]
+
+_FR_DEFAULT = {
+    "enabled": False,
+    "global_restricted": [],
+    "user_restrictions": {},
+    "user_unlocked": {}
+}
+
 def load_feature_restrictions():
     with _FR_LOCK:
         try:
             if os.path.exists(FEATURE_RESTRICTIONS_FILE):
                 with open(FEATURE_RESTRICTIONS_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                for k, v in _FR_DEFAULT.items():
+                    if k not in data:
+                        data[k] = v
+                return data
         except Exception:
             pass
-        return {"enabled": False, "restricted": []}
+        return dict(_FR_DEFAULT)
 
 def save_feature_restrictions(data):
     with _FR_LOCK:
@@ -14573,6 +14629,35 @@ def save_feature_restrictions(data):
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"save_feature_restrictions: {e}")
+
+def is_feature_restricted_for_user(user_id, feature_id):
+    """التحقق مما إذا كانت وظيفة معينة مقيّدة لمستخدم محدد."""
+    data = load_feature_restrictions()
+    if not data.get("enabled", False):
+        return False
+    # 1. قيود خاصة بالمستخدم
+    user_restr = data.get("user_restrictions", {}).get(user_id, [])
+    if "all" in user_restr or feature_id in user_restr:
+        return True
+    # 2. قيود عامة — يتجاوزها إذا كان المستخدم فتحها ببطاقة
+    if feature_id in data.get("global_restricted", []):
+        unlocked = data.get("user_unlocked", {}).get(user_id, [])
+        return feature_id not in unlocked
+    return False
+
+def is_user_restricted(user_id):
+    """تحقق إذا كان المستخدم مقيداً بأي شكل."""
+    data = load_feature_restrictions()
+    if not data.get("enabled", False):
+        return False
+    user_restr = data.get("user_restrictions", {}).get(user_id, [])
+    if user_restr:
+        return True
+    unlocked = data.get("user_unlocked", {}).get(user_id, [])
+    for f in data.get("global_restricted", []):
+        if f not in unlocked:
+            return True
+    return False
 
 def load_feature_vouchers():
     with _FV_LOCK:
@@ -14641,8 +14726,13 @@ def admin_delete_used_vouchers():
 
 @app.route("/api/feature_restrictions", methods=["GET"])
 def api_feature_restrictions_public():
+    user_id = session.get('user_id', 'user_1')
     r = load_feature_restrictions()
-    return jsonify({"success": True, "enabled": r.get("enabled", False), "restricted": r.get("restricted", [])})
+    restricted = []
+    for fid in FEATURE_LABELS:
+        if is_feature_restricted_for_user(user_id, fid):
+            restricted.append(fid)
+    return jsonify({"success": True, "enabled": r.get("enabled", False), "restricted": restricted})
 
 @app.route("/admin/api/feature_restrictions", methods=["GET", "POST"])
 def admin_feature_restrictions():
@@ -14653,38 +14743,47 @@ def admin_feature_restrictions():
         r = load_feature_restrictions()
         if "enabled" in data:
             r["enabled"] = bool(data["enabled"])
-        if "restricted" in data:
-            r["restricted"] = [f for f in data["restricted"] if f in FEATURE_LABELS]
+        if "global_restricted" in data:
+            r["global_restricted"] = [f for f in data["global_restricted"] if f in FEATURE_LABELS]
+        if "user_restrictions" in data:
+            r["user_restrictions"] = data["user_restrictions"]
+        if "user_unlocked" in data:
+            r["user_unlocked"] = data["user_unlocked"]
+        # دعم الـ schema القديم للتوافق العكسي
+        if "restricted" in data and "global_restricted" not in data:
+            r["global_restricted"] = [f for f in data["restricted"] if f in FEATURE_LABELS]
         save_feature_restrictions(r)
         return jsonify({"success": True, "message": "✅ تم حفظ إعدادات التقييد", "data": r})
     r = load_feature_restrictions()
     return jsonify({
         "success": True,
         "enabled": r.get("enabled", False),
-        "restricted": r.get("restricted", []),
-        "available_features": FEATURE_LABELS
+        "global_restricted": r.get("global_restricted", []),
+        "user_restrictions": r.get("user_restrictions", {}),
+        "user_unlocked": r.get("user_unlocked", {}),
+        "available_features": FEATURE_LABELS,
+        "features_list": RESTRICTED_FEATURES_LIST
     })
 
 # ── Feature Vouchers (Pro unlock) API ─────────────────────────────────────
 
 @app.route("/api/feature_status", methods=["GET"])
 def api_feature_status():
-    user_id = session.get("uid", "")
-    r = load_feature_restrictions()
-    fv = load_feature_vouchers()
+    user_id = session.get('user_id', session.get("uid", "user_1"))
     result = {}
     for feature in FEATURE_LABELS:
-        sys_restricted = r.get("enabled", False) and feature in r.get("restricted", [])
-        has_access = bool(user_id) and user_id in fv.get(feature, {}).get("users", [])
+        restr = is_feature_restricted_for_user(user_id, feature)
+        r = load_feature_restrictions()
+        unlocked_list = r.get("user_unlocked", {}).get(user_id, [])
         result[feature] = {
-            "restricted": sys_restricted and not has_access,
-            "unlocked": has_access,
+            "restricted": restr,
+            "unlocked": feature in unlocked_list,
         }
     return jsonify({"success": True, "features": result})
 
 @app.route("/api/unlock_feature", methods=["POST"])
 def api_unlock_feature():
-    user_id = session.get("uid", "")
+    user_id = session.get('user_id', session.get("uid", ""))
     if not user_id:
         return jsonify({"success": False, "message": "❌ يجب تسجيل الدخول أولاً"}), 401
     data = request.json or {}
@@ -14697,11 +14796,17 @@ def api_unlock_feature():
     result, err = validate_voucher(code)
     if err:
         return jsonify({"success": False, "message": err})
-    fv = load_feature_vouchers()
-    fv.setdefault(feature, {"users": []})
-    if user_id not in fv[feature]["users"]:
-        fv[feature]["users"].append(user_id)
-        save_feature_vouchers(fv)
+    voucher = result["voucher"]
+    allowed = voucher.get("allowed_features", [])
+    # البطاقة لا تقيد وظيفة معينة → تفتح الوظيفة المطلوبة مباشرة
+    if allowed and feature not in allowed:
+        return jsonify({"success": False, "message": "❌ هذه البطاقة لا تفتح الوظيفة المطلوبة"})
+    feat_data = load_feature_restrictions()
+    unlocked = feat_data.get("user_unlocked", {}).get(user_id, [])
+    if feature not in unlocked:
+        unlocked.append(feature)
+    feat_data.setdefault("user_unlocked", {})[user_id] = unlocked
+    save_feature_restrictions(feat_data)
     return jsonify({
         "success": True,
         "message": f"✅ تم فتح {FEATURE_LABELS.get(feature, feature)} بنجاح!"
@@ -14732,6 +14837,61 @@ def admin_feature_vouchers():
         d = fv.get(feature, {"users": []})
         result[feature] = {"label": label, "users": d.get("users", []), "user_count": len(d.get("users", []))}
     return jsonify({"success": True, "features": result})
+
+@app.route("/admin/api/send_vouchers_notification", methods=["POST"])
+def admin_send_vouchers_notification():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    data = request.json or {}
+    codes_text = data.get("text", "").strip()
+    if not codes_text:
+        return jsonify({"success": False, "message": "لا يوجد نص للإرسال"})
+    user_id = session.get('user_id', 'user_1')
+    try:
+        socketio.emit('new_broadcast_notification', {
+            "id": str(uuid.uuid4()),
+            "message": f"📋 نسخة الكروت المولّدة:\n\n{codes_text}",
+            "type": "success",
+            "timestamp": datetime.now().isoformat()
+        }, to=user_id)
+    except Exception as e:
+        logger.error(f"send_vouchers_notification error: {e}")
+    return jsonify({"success": True, "message": "✅ تم إرسال الكروت كإشعار"})
+
+@app.route("/admin/api/export_vouchers_txt_fixed", methods=["GET"])
+def admin_export_vouchers_txt_fixed():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    data = load_cards_data()
+    vouchers = data.get("vouchers", [])
+    status_map = {"unused": "🟢 غير مستخدم", "active": "🔵 نشط", "used": "🔴 مستخدم", "expired": "⚫ منتهي"}
+    lines = [
+        "═" * 50,
+        "    🎓 مركز سرعة إنجاز - قائمة الكروت (نسخة منسّقة)",
+        f"    تاريخ التصدير: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "═" * 50, ""
+    ]
+    if not vouchers:
+        lines.append("⚠️ لا توجد كروت في النظام")
+    else:
+        for i, v in enumerate(vouchers, 1):
+            plan_name = v.get("plan_name") or "بدون خطة"
+            status = status_map.get(v.get("status", ""), v.get("status", ""))
+            created = (v.get("created_at") or "").split("T")[0] or "---"
+            code = v.get("code") or (v.get("code_hash", "")[:12] + "***")
+            feats = ", ".join(v.get("allowed_features", [])) or "—"
+            lines.append(f"[{str(i).zfill(3)}] الكود: {code}")
+            lines.append(f"       الخطة: {plan_name} | {status} | التاريخ: {created}")
+            lines.append(f"       الوظائف: {feats}")
+            lines.append("")
+    lines += ["═" * 50]
+    content = "\n".join(lines)
+    response = make_response(content)
+    response.headers["Content-Type"] = "text/plain; charset=utf-8"
+    response.headers["Content-Disposition"] = (
+        f"attachment; filename=vouchers_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+    )
+    return response
 
 # ─── مسارات نظام التحديث الذاتي ──────────────────────────────────────────
 
