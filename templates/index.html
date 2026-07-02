@@ -640,7 +640,7 @@
                                 </button>
                             </div>
                             <div class="col-6 col-md-4">
-                                <button type="button" class="btn btn-outline-primary w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center" onclick="window.open('/saved_links','_blank')">
+                                <button type="button" id="btnSavedLinks" class="btn btn-outline-primary w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center" onclick="window.open('/saved_links','_blank')">
                                     <i class="fas fa-bookmark fa-2x mb-2"></i>
                                     <span class="small fw-bold">الروابط المحفوظة</span>
                                 </button>
@@ -9016,14 +9016,16 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 // ══════ نظام PRO: شارات + فتح بالبطاقة ══════
 const PRO_FEATURE_MAP = {
-    'learning':   'btnLearningSystem',
-    'rotating':   'btnRotatingSystem',
-    'group_search':'btnSearchMyLinksDropdown',
-    'auto_join':  'btnAutoJoinAdvanced',
-    'auto_replies':'btnAutoReplies',
-    'saved_links': null,
-    'monitoring':  null,
-    'scan_groups': null,
+    'learning':        'btnLearningSystem',
+    'rotating':        'btnRotatingSystem',
+    'group_search':    'btnSearchMyLinksDropdown',
+    'auto_join':       'btnAutoJoinAdvanced',
+    'auto_replies':    'btnAutoReplies',
+    'saved_links':     'btnSavedLinks',
+    'monitoring':      'startMonitoringBtn',
+    'scan_groups':     'scanGroupsBtn',
+    'message_sending': 'sendNowBtn',
+    'link_finder':     'lfStartBtn',
 };
 const PRO_FEATURE_LABELS = {
     'learning':    'نظام التعلم الذكي',
