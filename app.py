@@ -1181,22 +1181,83 @@ PROTECTION_BOTS = {
     'captchabot', 'captcha_bot', 'verifybot', 'verify_bot',
     'recaptcha_bot', 'human_verify_bot', 'wickbot', 'wick_bot',
     'dynobot', 'silence_bot', 'silencebot', 'mutebot', 'mute_bot',
-    'word_filter_bot', 'filterbot', 'filter_bot'
+    'word_filter_bot', 'filterbot', 'filter_bot',
+    # ── بوت جبل وأسماؤه البديلة ──
+    'jabal_bot', 'jabalbot', 'jabal', 'jbl_bot', 'jbl',
+    'mtn_bot', 'mountain_bot', 'mtnchat_bot',
+    # ── بوتات إضافية شائعة ──
+    'groupprotect_bot', 'tgspam_bot', 'spam_protection_bot',
+    'adminbot', 'admin_bot', 'groupadmin_bot',
 }
 
 PROTECTION_BOT_SUBSTRINGS = (
     'shieldy', 'rose', 'guard', 'combot', 'spamwatch', 'antispam',
     'anti_spam', 'safeguard', 'defender', 'banhammer', 'captcha',
     'verify', 'protect', 'police', 'sheriff', 'cleanbot', 'noflood',
-    'antiflood', 'flood_', 'modbot', 'nochannel'
+    'antiflood', 'flood_', 'modbot', 'nochannel',
+    # ── إضافات بوت جبل ──
+    'jabal', 'jbl', 'mountain', 'mtn',
+    # ── كلمات عامة ──
+    'antispam', 'nospam', 'stopspam', 'silencebot', 'mutebot',
 )
 
 PROTECTED_GROUPS_CACHE = {}
 PROTECTED_GROUPS_LOCK = Lock()
 
-def _cache_protection(cache_key, result, reason):
+# ── نظام التعلم التلقائي للبوتات ────────────────────────────────────────────
+BOTS_DISCOVERED_FILE = os.path.join(DATA_DIR, "discovered_bots.json")
+_BOTS_FILE_LOCK = threading.Lock()
+
+def load_discovered_bots():
+    with _BOTS_FILE_LOCK:
+        try:
+            if os.path.exists(BOTS_DISCOVERED_FILE):
+                with open(BOTS_DISCOVERED_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {"bots": []}
+
+def save_discovered_bots(data):
+    with _BOTS_FILE_LOCK:
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(BOTS_DISCOVERED_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"فشل حفظ البوتات المكتشفة: {e}")
+
+def add_discovered_bot(bot_username):
+    if not bot_username:
+        return
+    bot_username = bot_username.lower().lstrip('@')
+    if bot_username in PROTECTION_BOTS:
+        return
+    data = load_discovered_bots()
+    if bot_username in data.get("bots", []):
+        return
+    data.setdefault("bots", []).append(bot_username)
+    save_discovered_bots(data)
+    PROTECTION_BOTS.add(bot_username)
+    logger.info(f"✅ تم اكتشاف بوت حماية جديد وحفظه: @{bot_username}")
+
+# تحميل البوتات المكتشفة مسبقاً عند بدء التشغيل
+try:
+    _disc = load_discovered_bots()
+    for _b in _disc.get("bots", []):
+        PROTECTION_BOTS.add(_b)
+    if _disc.get("bots"):
+        logger.info(f"✅ تم تحميل {len(_disc['bots'])} بوت مكتشف من discovered_bots.json")
+except Exception:
+    pass
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _cache_protection(cache_key, result, reason, bots=None):
     with PROTECTED_GROUPS_LOCK:
-        PROTECTED_GROUPS_CACHE[cache_key] = {'result': result, 'reason': reason, 'ts': time.time()}
+        PROTECTED_GROUPS_CACHE[cache_key] = {
+            'result': result, 'reason': reason,
+            'bots': bots or [], 'ts': time.time()
+        }
 
 def save_settings(user_id, settings, force=False):
     try:
@@ -1384,68 +1445,66 @@ class TelegramClientManager:
         except Exception as e:
             logger.error(f"Failed to send to saved messages: {str(e)}")
 
-    async def is_group_protected(self, entity_obj):
-        """التحقق مما إذا كانت المجموعة تحتوي على بوتات حماية - نسخة محسنة"""
+    async def get_group_protection_details(self, entity_obj):
+        """
+        فحص شامل للمجموعة — يرجع (is_protected, reason, detected_bots).
+        يحفظ أي بوتات جديدة تلقائياً في discovered_bots.json.
+        """
         try:
             chat_id = getattr(entity_obj, 'id', None)
             if chat_id is None:
-                return False, None
+                return False, None, []
             cache_key = (self.user_id, chat_id)
             with PROTECTED_GROUPS_LOCK:
                 cached = PROTECTED_GROUPS_CACHE.get(cache_key)
-                if cached is not None:
-                    if time.time() - cached.get('ts', 0) < 1800:
-                        return cached['result'], cached['reason']
+                if cached is not None and time.time() - cached.get('ts', 0) < 1800:
+                    return cached['result'], cached['reason'], cached.get('bots', [])
+
             reason = None
             detected_bots = []
 
+            # ── فحص القيود المباشرة ────────────────────────────────────────
             try:
                 full = await self.client.get_entity(entity_obj)
                 banned = getattr(getattr(full, 'default_banned_rights', None), 'send_messages', None)
                 if banned:
                     reason = 'المجموعة تمنع الأعضاء من الإرسال (restricted)'
-                    _cache_protection(cache_key, True, reason)
-                    return True, reason
+                    _cache_protection(cache_key, True, reason, [])
+                    return True, reason, []
             except Exception:
                 pass
 
+            # ── فحص الأعضاء بحثاً عن بوتات الحماية ──────────────────────
             try:
-                bot_count = 0
-                async for participant in self.client.iter_participants(entity_obj, limit=50):
+                async for participant in self.client.iter_participants(entity_obj, limit=100):
                     uname = (getattr(participant, 'username', '') or '').lower()
                     if not uname:
                         continue
                     if uname in PROTECTION_BOTS:
                         detected_bots.append(f"@{uname}")
-                        bot_count += 1
                         reason = f'بوت حماية مكتشف: @{uname}'
-                        logger.info(f"Group {chat_id} protected ({reason}) for user {self.user_id}")
+                        logger.info(f"Group {chat_id} protected by known bot @{uname}")
                     elif any(s in uname for s in PROTECTION_BOT_SUBSTRINGS):
                         detected_bots.append(f"@{uname}")
-                        bot_count += 1
-                        reason = f'بوت حماية مكتشف (مشتبه): @{uname}'
-                        logger.info(f"Group {chat_id} possibly protected ({reason}) for user {self.user_id}")
-                    if bot_count >= 3:
+                        reason = f'بوت حماية مشتبه: @{uname}'
+                        logger.info(f"Group {chat_id} possibly protected by @{uname}")
+                        # ── تعلم تلقائي: حفظ البوت المشتبه به ───────────
+                        try:
+                            add_discovered_bot(uname)
+                        except Exception:
+                            pass
+                    if len(detected_bots) >= 5:
                         break
+            except Exception as iter_err:
+                logger.debug(f"iter_participants فشل لـ {chat_id}: {iter_err}")
 
-                if detected_bots:
-                    reason = f'بوتات حماية مكتشفة: {", ".join(detected_bots[:5])}'
-                    _cache_protection(cache_key, True, reason)
-                    try:
-                        warning_msg = f"""🛡️ **تنبيه: مجموعة محمية**
-
-⚠️ تم اكتشاف بوتات حماية في المجموعة:
-{chr(10).join([f'  • {bot}' for bot in detected_bots[:5]])}
-
-📌 **نصيحة:** يوصى بعدم إرسال روابط أو رسائل ترويجية في هذه المجموعة.
-💡 يمكنك تفعيل خيار "تخطي المجموعات المحمية" أو "تنقية الروابط" من الإعدادات.
-
-المجموعة: {getattr(entity_obj, 'title', chat_id)}"""
-                        await self.client.send_message('me', warning_msg, link_preview=False)
-                    except Exception as warn_err:
-                        logger.debug(f"Failed to send protection warning: {warn_err}")
+            if detected_bots:
+                reason = f'بوتات حماية مكتشفة: {", ".join(detected_bots[:5])}'
+                _cache_protection(cache_key, True, reason, detected_bots)
+                # إشعار socket فوري
+                try:
                     socketio.emit('log_update', {
-                        "message": f"🛡️ اكتشفت بوتات حماية في {getattr(entity_obj, 'title', chat_id)}: {', '.join(detected_bots[:3])}"
+                        "message": f"🛡️ مجموعة محمية: {getattr(entity_obj, 'title', chat_id)} — {', '.join(detected_bots[:3])}"
                     }, to=self.user_id)
                     socketio.emit('group_protection_warning', {
                         "group_id": chat_id,
@@ -1453,15 +1512,20 @@ class TelegramClientManager:
                         "bots": detected_bots,
                         "timestamp": time.strftime('%H:%M:%S')
                     }, to=self.user_id)
-                    return True, reason
-            except Exception as iter_err:
-                logger.debug(f"Cannot iterate participants for {chat_id}: {iter_err}")
+                except Exception:
+                    pass
+                return True, reason, detected_bots
 
-            _cache_protection(cache_key, False, None)
-            return False, None
+            _cache_protection(cache_key, False, None, [])
+            return False, None, []
         except Exception as e:
-            logger.debug(f"is_group_protected error: {e}")
-            return False, None
+            logger.debug(f"get_group_protection_details error: {e}")
+            return False, None, []
+
+    async def is_group_protected(self, entity_obj):
+        """التحقق من حماية المجموعة — يرجع (is_protected, reason) للتوافق مع الكود القديم."""
+        is_prot, reason, _ = await self.get_group_protection_details(entity_obj)
+        return is_prot, reason
 
     async def is_session_valid(self):
         """التحقق من صحة الجلسة الحالية"""
@@ -2784,7 +2848,12 @@ class TelegramManager:
 
         raise Exception(str(last_exc) if last_exc else f"لا يمكن الوصول إلى: {entity}")
 
-    def send_message_async(self, user_id, entity, message):
+    def send_message_async(self, user_id, entity, message, forced_action=None):
+        """
+        إرسال رسالة مع دعم الإجراء المختار مسبقاً من نافذة الفحص الاستباقي.
+        forced_action: 'skip' | 'sanitize' | 'salam' | 'send' | None
+          None  → استخدم الإعدادات الافتراضية للمستخدم
+        """
         try:
             with USERS_LOCK:
                 if user_id not in USERS:
@@ -2806,8 +2875,18 @@ class TelegramManager:
 
             entity_obj = self._resolve_entity(client_manager, entity)
 
-            # ── استدعاء واحد فقط لفحص الحماية ثم تمريره لـ _maybe_sanitize ──
-            action, _ = self._check_group_protection(user_id, client_manager, entity_obj, entity)
+            # ── تحديد الإجراء: من الفحص الاستباقي أو من الإعدادات ──────────
+            if forced_action is not None:
+                # forced_action قادم من /api/pre_send_scan — يُطبَّق مباشرة
+                action = forced_action
+                if action == 'skip':
+                    socketio.emit('log_update', {
+                        "message": f"⏭️ تم تخطي {entity} (قرار الفحص الاستباقي)"
+                    }, to=user_id)
+                    return {"success": False, "skipped": True,
+                            "message": f"تم تخطي المجموعة: {entity}"}
+            else:
+                action, _ = self._check_group_protection(user_id, client_manager, entity_obj, entity)
 
             # ── الإرسال الذكي المتقدم للمجموعات المحمية (وضع salam) ──
             if action == 'salam':
@@ -2910,6 +2989,36 @@ class TelegramManager:
         except Exception as e:
             logger.warning(f"_check_group_protection error: {e}")
             return 'send', None
+
+    def _check_group_protection_detailed(self, user_id, client_manager, entity_obj, entity_label):
+        """
+        فحص تفصيلي للمجموعة يُرجع dict كامل يشمل:
+        - protected: bool
+        - bots: list
+        - reason: str|None
+        - entity_label: str
+        مستخدم من /api/pre_send_scan فقط.
+        """
+        try:
+            is_prot, reason, bots = client_manager.run_coroutine(
+                client_manager.get_group_protection_details(entity_obj)
+            )
+            return {
+                "entity_label": entity_label,
+                "protected": is_prot,
+                "bots": bots,
+                "reason": reason,
+                "error": False
+            }
+        except Exception as e:
+            logger.warning(f"_check_group_protection_detailed error for {entity_label}: {e}")
+            return {
+                "entity_label": entity_label,
+                "protected": False,
+                "bots": [],
+                "reason": f"خطأ في الفحص: {str(e)[:80]}",
+                "error": True
+            }
 
     def _send_protection_warning(self, user_id, group_name, reason):
         """إرسال تحذير للمستخدم عن المجموعة المحمية"""
@@ -4684,6 +4793,68 @@ def api_stop_monitoring():
         "message": "❌ النظام غير مشغل"
     })
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  API: الفحص الاستباقي للمجموعات قبل الإرسال
+# ══════════════════════════════════════════════════════════════════════════════
+@app.route("/api/pre_send_scan", methods=["POST"])
+def api_pre_send_scan():
+    """
+    يفحص قائمة المجموعات المطلوبة ويرجع تقريراً مفصلاً:
+      - protected: bool
+      - bots: list
+      - reason: str
+    لكل مجموعة، ثم يحسب الإحصائيات الإجمالية.
+    """
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "❌ الجلسة غير صالحة"}), 401
+
+    user_id = session['user_id']
+    with USERS_LOCK:
+        user_data = USERS.get(user_id, {})
+        client_manager = user_data.get('client_manager')
+
+    if not client_manager or not client_manager.client:
+        return jsonify({"success": False, "message": "❌ العميل غير متصل"}), 400
+
+    data = request.get_json() or {}
+    groups_raw = data.get('groups', [])
+    if isinstance(groups_raw, str):
+        groups_raw = [g.strip() for g in groups_raw.replace('\n', ',').split(',') if g.strip()]
+    groups_raw = [g for g in groups_raw if g]
+
+    if not groups_raw:
+        return jsonify({"success": False, "message": "❌ لا توجد مجموعات للفحص"}), 400
+
+    results = []
+    for group in groups_raw:
+        try:
+            entity_obj = telegram_manager._resolve_entity(client_manager, group)
+            info = telegram_manager._check_group_protection_detailed(
+                user_id, client_manager, entity_obj, group
+            )
+        except Exception as e:
+            info = {
+                "entity_label": group,
+                "protected": False,
+                "bots": [],
+                "reason": f"خطأ في حل الكيان: {str(e)[:80]}",
+                "error": True
+            }
+        results.append(info)
+
+    protected_count = sum(1 for r in results if r.get('protected'))
+    total = len(results)
+
+    return jsonify({
+        "success": True,
+        "results": results,
+        "protected_count": protected_count,
+        "safe_count": total - protected_count,
+        "total": total,
+        "all_clear": protected_count == 0
+    })
+
+
 @app.route("/api/send_now", methods=["POST"])
 def api_send_now():
     if 'user_id' not in session:
@@ -4718,6 +4889,8 @@ def api_send_now():
     groups = data.get('groups', '').strip()
     images = data.get('images', [])
     send_to_all = bool(data.get('send_to_all', False))
+    # الإجراء المختار من نافذة الفحص الاستباقي (skip / sanitize / salam / None)
+    pre_scan_action = data.get('action', None)  # None = استخدم الإعدادات الافتراضية
 
     if not message and not images:
         return jsonify({
@@ -4839,7 +5012,10 @@ def api_send_now():
                             user_id, group, image_files
                         )
                     else:
-                        result = telegram_manager.send_message_async(user_id, group, message)
+                        result = telegram_manager.send_message_async(
+                            user_id, group, message,
+                            forced_action=pre_scan_action  # None = استخدم الإعدادات الافتراضية
+                        )
 
                     if isinstance(result, dict) and result.get('skipped'):
                         socketio.emit('log_update', {
