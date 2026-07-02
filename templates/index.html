@@ -8681,36 +8681,138 @@ function addSelectedGroupsToField() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  ③ دالة sendNow المطورة (تدعم send_to_all)
+//  ③ دالة sendNow المطورة (مع الفحص الاستباقي للمجموعات)
 // ═══════════════════════════════════════════════════════════════
+// متغيرات الفحص الاستباقي
+var _preScanMessage = '';
+var _preScanGroups  = '';
+var _preScanImages  = [];
+var _preScanSendToAll = false;
+var _preScanBtnOrig = '';
+var _preScanBtn     = null;
+
+async function _performSendNow(action) {
+    try {
+        var payload = {
+            message:     _preScanMessage,
+            groups:      _preScanGroups,
+            images:      _preScanImages,
+            send_to_all: _preScanSendToAll,
+            action:      action
+        };
+        var resp = await fetch('/api/send_now', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        var data = await resp.json();
+        if (data.success) {
+            alert('✅ ' + data.message);
+        } else {
+            alert('❌ ' + (data.message || 'خطأ غير معروف'));
+        }
+    } catch(e) {
+        alert('❌ خطأ في الاتصال: ' + e.message);
+    } finally {
+        if (_preScanBtn) {
+            _preScanBtn.disabled = false;
+            _preScanBtn.innerHTML = _preScanBtnOrig;
+        }
+    }
+}
+
+function _showPreScanResults(scanData) {
+    var modal = new bootstrap.Modal(document.getElementById('preSendScanModal'));
+    // ملخص
+    var summaryEl = document.getElementById('preScanSummary');
+    if (scanData.all_clear) {
+        summaryEl.className = 'alert alert-success mb-2 py-2 small';
+        summaryEl.innerHTML = '✅ جميع المجموعات آمنة — يمكنك الإرسال مباشرة.';
+        document.getElementById('preScanActionRow').style.display = 'none';
+    } else {
+        summaryEl.className = 'alert alert-warning mb-2 py-2 small';
+        summaryEl.innerHTML = '⚠️ <strong>' + scanData.protected_count + '</strong> مجموعة محمية من أصل ' + scanData.total + ' — اختر الإجراء:';
+        document.getElementById('preScanActionRow').style.display = 'block';
+    }
+    // قائمة المجموعات
+    var listEl = document.getElementById('preScanGroupsList');
+    listEl.innerHTML = (scanData.results || []).map(function(r) {
+        var badge = r.protected ? '<span class="badge bg-danger">محمية</span>' : '<span class="badge bg-success">آمنة</span>';
+        var bots  = (r.bots && r.bots.length) ? ' <small class="text-warning">' + r.bots.join(' ') + '</small>' : '';
+        return '<div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-1 px-1" style="font-size:0.78rem;">' +
+               '<span class="text-truncate me-2" style="max-width:55%;">' + r.entity_label + '</span>' +
+               '<span>' + badge + bots + '</span></div>';
+    }).join('');
+    // شرح الإجراءات
+    var actionSel = document.getElementById('preScanAction');
+    var actionExp = document.getElementById('preScanActionExplain');
+    var actionTexts = {
+        skip:     '⏭️ لن تُرسل للمجموعات المحمية، وتُرسل للآمنة فقط.',
+        sanitize: '🧹 تُنقَّى الرسالة (تُزال الروابط) ثم تُرسل لجميع المجموعات.',
+        salam:    '🧠 إرسال ذكي: "السلام عليكم" أولاً ثم تعديلها لاحقاً للمجموعات المحمية.'
+    };
+    function updateExp() { actionExp.textContent = actionTexts[actionSel.value] || ''; }
+    actionSel.onchange = updateExp;
+    updateExp();
+    // زر التأكيد
+    document.getElementById('preScanConfirmBtn').onclick = async function() {
+        var bsModal = bootstrap.Modal.getInstance(document.getElementById('preSendScanModal'));
+        if (bsModal) bsModal.hide();
+        var chosenAction = scanData.all_clear ? null : actionSel.value;
+        await _performSendNow(chosenAction);
+    };
+    modal.show();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     var btn = document.getElementById('sendNowBtn');
     if (btn && !btn._newHandlerAttached) {
         btn._newHandlerAttached = true;
         btn.addEventListener('click', async function() {
-            var message = (document.getElementById('message') || {value:''}).value.trim();
-            var groups  = (document.getElementById('groups')  || {value:''}).value.trim();
+            var message   = (document.getElementById('message') || {value:''}).value.trim();
+            var groups    = (document.getElementById('groups')  || {value:''}).value.trim();
             var sendToAll = (_sendMode === 'all');
             var hasImages = (window.uploadedImages && window.uploadedImages.length > 0);
             if (!message && !hasImages) { alert('❌ يجب كتابة رسالة أو رفع صورة'); return; }
             if (!sendToAll && !groups) { alert('❌ يجب تحديد المجموعات أو اختر "كل المجموعات"'); return; }
-            var orig = btn.innerHTML;
+
+            // حفظ البيانات للإرسال اللاحق
+            _preScanMessage   = message;
+            _preScanGroups    = groups;
+            _preScanImages    = window.uploadedImages || [];
+            _preScanSendToAll = sendToAll;
+            _preScanBtn       = btn;
+            _preScanBtnOrig   = btn.innerHTML;
+
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري الإرسال...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري فحص المجموعات...';
+
+            // إذا كان الوضع "كل المجموعات"، أرسل مباشرة بدون فحص مسبق
+            if (sendToAll) {
+                await _performSendNow(null);
+                return;
+            }
+
+            // فحص استباقي
             try {
-                var payload = { message: message, groups: groups, images: window.uploadedImages || [], send_to_all: sendToAll };
-                var resp = await fetch('/api/send_now', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-                var data = await resp.json();
-                if (data.success) {
-                    alert('✅ ' + data.message);
-                } else {
-                    alert('❌ ' + (data.message || 'خطأ غير معروف'));
+                var groupsList = groups.split(/[\n,]/).map(function(g){ return g.trim(); }).filter(Boolean);
+                var scanResp = await fetch('/api/pre_send_scan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({groups: groupsList})
+                });
+                var scanData = await scanResp.json();
+                if (!scanData.success) {
+                    // فشل الفحص — أرسل مباشرة
+                    await _performSendNow(null);
+                    return;
                 }
-            } catch(e) {
-                alert('❌ خطأ في الاتصال: ' + e.message);
-            } finally {
                 btn.disabled = false;
-                btn.innerHTML = orig;
+                btn.innerHTML = _preScanBtnOrig;
+                _showPreScanResults(scanData);
+            } catch(e) {
+                // أي خطأ في الفحص — أرسل مباشرة
+                await _performSendNow(null);
             }
         });
     }
@@ -9056,5 +9158,54 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(initProSystem, 1500);
 });
 </script>
+<!-- ══════════════════════════════════════════════════════════════
+     Modal: الفحص الاستباقي للمجموعات قبل الإرسال
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="preSendScanModal" tabindex="-1" aria-labelledby="preSendScanLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" style="background:#1a1a2e;color:#e0e0e0;border:1px solid #444;">
+      <div class="modal-header" style="border-bottom:1px solid #333;">
+        <h5 class="modal-title" id="preSendScanLabel">
+          <i class="fas fa-shield-alt me-2 text-warning"></i>
+          🛡️ فحص المجموعات قبل الإرسال
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:1rem;">
+        <!-- ملخص الفحص -->
+        <div id="preScanSummary" class="alert alert-info py-2 small mb-2">
+          <i class="fas fa-spinner fa-spin me-1"></i> جاري تحليل النتائج...
+        </div>
+        <!-- قائمة المجموعات -->
+        <div id="preScanGroupsList"
+             style="max-height:320px;overflow-y:auto;border:1px solid #333;border-radius:6px;padding:4px;background:#111827;">
+        </div>
+        <!-- اختيار الإجراء -->
+        <div id="preScanActionRow" class="mt-3" style="display:none;">
+          <label class="form-label fw-bold" style="font-size:0.85rem;">
+            <i class="fas fa-sliders-h me-1 text-info"></i>اختر الإجراء للمجموعات المحمية:
+          </label>
+          <select id="preScanAction" class="form-select form-select-sm mb-2"
+                  style="background:#1e2535;color:#e0e0e0;border:1px solid #555;">
+            <option value="salam" selected>🧠 إرسال ذكي (السلام عليكم ثم تعديل)</option>
+            <option value="skip">⏭️ تخطي المجموعات المحمية</option>
+            <option value="sanitize">🧹 تنقية الرسالة (حذف الروابط وإرسال)</option>
+          </select>
+          <div id="preScanActionExplain"
+               class="small text-info"
+               style="min-height:1.4em;"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #333;">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+          <i class="fas fa-times me-1"></i>إلغاء
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="preScanConfirmBtn">
+          <i class="fas fa-paper-plane me-1"></i>✅ موافق وإرسال
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
