@@ -3145,6 +3145,8 @@ class TelegramManager:
                             "waited": messages_after,
                             "message": f"✅ تم تعديل الرسالة في {entity_label} بعد {messages_after} رسائل"
                         }, to=user_id)
+                        # ── إيقاف الدورة بعد نجاح الإرسال — منع إرسال "السلام عليكم" مجدداً
+                        break
                     except Exception as edit_err:
                         logger.error(f"[Smart] فشل تعديل الرسالة في {entity_label}: {edit_err}")
                         socketio.emit('log_update', {
@@ -14815,10 +14817,21 @@ def is_feature_restricted_for_user(user_id, feature_id):
     user_restr = data.get("user_restrictions", {}).get(user_id, [])
     if "all" in user_restr or feature_id in user_restr:
         return True
-    # 2. قيود عامة — يتجاوزها إذا كان المستخدم فتحها ببطاقة
+    # 2. قيود عامة — يتجاوزها إذا كان المستخدم فتحها ببطاقة أو مُدرج في القائمة المجانية (feature_vouchers)
     if feature_id in data.get("global_restricted", []):
+        # فحص فتح البطاقة
         unlocked = data.get("user_unlocked", {}).get(user_id, [])
-        return feature_id not in unlocked
+        if feature_id in unlocked:
+            return False
+        # فحص قائمة المستخدمين المجانيين من لوحة الإدارة (feature_vouchers)
+        try:
+            fv = load_feature_vouchers()
+            allowed_users = fv.get(feature_id, {}).get("users", [])
+            if user_id in allowed_users:
+                return False
+        except Exception:
+            pass
+        return True
     return False
 
 def is_user_restricted(user_id):
