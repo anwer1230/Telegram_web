@@ -232,7 +232,7 @@
       "code_hash": "d7458460ae809811618ebc8b119a45973b37c50bbbfd5b65bf3e8dc47a5b2e06",
       "plan_id": 2,
       "plan_name": "أسبوعية",
-      "status": "active",
+      "status": "used",
       "created_at": "2026-06-25T17:00:56.679619",
       "used_at": "2026-06-25T17:00:56.751002",
       "expires_at": "2026-07-02T17:00:56.751002"
@@ -248,15 +248,5 @@
     }
   ],
   "active_sessions": [],
-  "active_card_sessions": [
-    {
-      "session_id": "25437574012a41d7eb8eb2685bec322d",
-      "voucher_code_hash": "d7458460ae809811618ebc8b119a45973b37c50bbbfd5b65bf3e8dc47a5b2e06",
-      "plan_name": "أسبوعية",
-      "ip_address": "127.0.0.1",
-      "start_time": "2026-06-25T17:00:56.751002",
-      "expires_at": "2026-07-02T17:00:56.751002",
-      "session_timeout": 604800
-    }
-  ]
+  "active_card_sessions": []
 }

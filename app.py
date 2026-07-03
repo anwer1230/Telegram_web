@@ -14453,6 +14453,19 @@ def save_cards_data(data):
         except Exception as e:
             logger.error(f"Error saving cards data: {e}")
 
+def voucher_display_code(v):
+    """يرجع رمز البطاقة الظاهر للمشرف — يدعم الكروت القديمة التي لا تحتوي على 'code'."""
+    return v.get("code") or (v.get("code_hash", "")[:12] + "***" if v.get("code_hash") else "—")
+
+def voucher_display_plan_name(v, plans=None):
+    """يرجع اسم الخطة — يدعم الكروت القديمة التي تخزن plan_id فقط بدون plan_name."""
+    if v.get("plan_name"):
+        return v["plan_name"]
+    if plans is None:
+        plans = load_cards_data().get("plans", [])
+    plan = next((p for p in plans if p.get("id") == v.get("plan_id")), None)
+    return plan["name"] if plan else "بدون خطة"
+
 def generate_vouchers(plan_id, count=10, allowed_features=None):
     """إنشاء قسائم بطاقات جديدة مع تحديد الوظائف التي تفتحها"""
     data = load_cards_data()
@@ -14607,7 +14620,7 @@ def api_login_card():
     # ── دخول مجاني بكلمة مرور الأدمن (بدون بطاقة) ──────────────
     if code == ADMIN_PASSWORD or code.replace("-","") == ADMIN_PASSWORD:
         session["card_logged_in"]   = True
-        session["card_session_id"]  = secrets.token_hex(16)
+        session.pop("card_session_id", None)
         session["card_plan_name"]   = "أدمن — دخول مجاني"
         session["card_expires_at"]  = ""
         session["admin_auth"]       = True
@@ -14888,15 +14901,33 @@ def admin_list_vouchers_alias():
     if not session.get("admin_auth"):
         return jsonify({"success": False, "message": "غير مخول"}), 403
     data = load_cards_data()
+    sessions_by_hash = {}
+    for s in data.get("active_card_sessions", []):
+        sessions_by_hash[s.get("voucher_code_hash")] = s
     result = []
+    now = datetime.now()
+    plans = data.get("plans", [])
     for v in data.get("vouchers", []):
+        code_hash = v.get("code_hash", "")
+        active_session = sessions_by_hash.get(code_hash)
+        used_by = active_session.get("ip_address") if active_session else None
+        remaining_seconds = None
+        expires_raw = v.get("expires_at") or ""
+        if expires_raw and v.get("status") in ("active",):
+            try:
+                remaining_seconds = max(0, int((datetime.fromisoformat(expires_raw) - now).total_seconds()))
+            except Exception:
+                remaining_seconds = None
         result.append({
-            "code": v.get("code") or (v.get("code_hash", "")[:12] + "***"),
-            "plan_name": v.get("plan_name", "—"),
+            "code": voucher_display_code(v),
+            "plan_name": voucher_display_plan_name(v, plans),
             "status": v.get("status", "unknown"),
-            "used": v.get("status") in ("used", "expired"),
+            "used": v.get("status") in ("used", "active", "expired"),
+            "used_by": used_by,
             "created_at": (v.get("created_at") or "")[:10],
+            "used_at": (v.get("used_at") or "")[:16],
             "expires_at": (v.get("expires_at") or "")[:16],
+            "remaining_seconds": remaining_seconds,
         })
     return jsonify({"success": True, "vouchers": result})
 
@@ -15053,6 +15084,7 @@ def admin_export_vouchers_txt_fixed():
         return jsonify({"success": False, "message": "غير مخول"}), 403
     data = load_cards_data()
     vouchers = data.get("vouchers", [])
+    plans = data.get("plans", [])
     status_map = {"unused": "🟢 غير مستخدم", "active": "🔵 نشط", "used": "🔴 مستخدم", "expired": "⚫ منتهي"}
     lines = [
         "═" * 50,
@@ -15064,10 +15096,10 @@ def admin_export_vouchers_txt_fixed():
         lines.append("⚠️ لا توجد كروت في النظام")
     else:
         for i, v in enumerate(vouchers, 1):
-            plan_name = v.get("plan_name") or "بدون خطة"
+            plan_name = voucher_display_plan_name(v, plans)
             status = status_map.get(v.get("status", ""), v.get("status", ""))
             created = (v.get("created_at") or "").split("T")[0] or "---"
-            code = v.get("code") or (v.get("code_hash", "")[:12] + "***")
+            code = voucher_display_code(v)
             feats = ", ".join(v.get("allowed_features", [])) or "—"
             lines.append(f"[{str(i).zfill(3)}] الكود: {code}")
             lines.append(f"       الخطة: {plan_name} | {status} | التاريخ: {created}")
@@ -15344,13 +15376,16 @@ def admin_export_vouchers_txt():
         return jsonify({"success": False, "message": "غير مصرح"}), 403
     data = load_cards_data()
     vouchers = data.get("vouchers", [])
+    plans = data.get("plans", [])
     lines = ["═══════════════════════════════════════",
              "    مركز سرعة انجاز - قائمة الكروت",
              f"    تاريخ التصدير: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
              "═══════════════════════════════════════\n"]
     for i, v in enumerate(vouchers, 1):
         status_ar = {"unused": "غير مستخدم", "active": "نشط", "used": "مستخدم", "expired": "منتهي"}.get(v.get("status",""), v.get("status",""))
-        lines.append(f"[{i}] الخطة: {v.get('plan_name','')} | الحالة: {status_ar} | التاريخ: {v.get('created_at','')[:10]}")
+        code = voucher_display_code(v)
+        plan_name = voucher_display_plan_name(v, plans)
+        lines.append(f"[{i}] الكود: {code} | الخطة: {plan_name} | الحالة: {status_ar} | التاريخ: {v.get('created_at','')[:10]}")
     content = "\n".join(lines)
     response = make_response(content)
     response.headers["Content-Type"] = "text/plain; charset=utf-8"
@@ -15363,6 +15398,7 @@ def admin_export_vouchers_pdf():
         return jsonify({"success": False, "message": "غير مصرح"}), 403
     data = load_cards_data()
     vouchers = data.get("vouchers", [])
+    plans = data.get("plans", [])
     # إنشاء PDF بسيط بصيغة HTML ثم إعادته كـ HTML للطباعة إذا لم تتوفر مكتبة PDF
     html_content = f"""<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -15378,13 +15414,15 @@ h2{{color:#1e3c78;}} .meta{{color:#666;font-size:11px;}}
 <h2>🏦 مركز سرعة انجاز — قائمة الكروت</h2>
 <p class="meta">تاريخ التصدير: {datetime.now().strftime('%Y-%m-%d %H:%M')} | إجمالي الكروت: {len(vouchers)}</p>
 <table>
-<tr><th>#</th><th>الخطة</th><th>الحالة</th><th>تاريخ الإنشاء</th><th>تاريخ الاستخدام</th></tr>
+<tr><th>#</th><th>رقم البطاقة</th><th>الخطة</th><th>الحالة</th><th>تاريخ الإنشاء</th><th>تاريخ الاستخدام</th></tr>
 """
     status_map = {"unused": ("غير مستخدم","unused"), "active": ("نشط","active"), "used": ("مستخدم","used"), "expired": ("منتهي","expired")}
     for i, v in enumerate(vouchers, 1):
         st = v.get("status","")
         st_ar, st_cls = status_map.get(st, (st, ""))
-        html_content += f"<tr><td>{i}</td><td>{v.get('plan_name','')}</td><td class='{st_cls}'>{st_ar}</td><td>{v.get('created_at','')[:10]}</td><td>{v.get('used_at','') or '-'}</td></tr>\n"
+        code = voucher_display_code(v)
+        plan_name = voucher_display_plan_name(v, plans)
+        html_content += f"<tr><td>{i}</td><td style='font-family:monospace;'>{code}</td><td>{plan_name}</td><td class='{st_cls}'>{st_ar}</td><td>{v.get('created_at','')[:10]}</td><td>{v.get('used_at','') or '-'}</td></tr>\n"
     html_content += f"""</table>
 <script>window.onload=function(){{window.print();}}</script>
 </body></html>"""

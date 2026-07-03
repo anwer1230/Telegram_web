@@ -566,35 +566,48 @@
             <!-- ────────────── قسم الكروت ────────────── -->
             <div id="sec-cards" class="section-pane fade-up" style="display:none;">
 
-                <!-- حالة النظام -->
+                <!-- نظام البطاقات -->
                 <div class="panel">
                     <div class="panel-header">
                         <div class="panel-title">
-                            <i class="fas fa-power-off" style="color:var(--cyan);"></i>
-                            حالة نظام الكروت
+                            <i class="fas fa-id-card-alt" style="color:var(--cyan);"></i>
+                            نظام البطاقات
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <span id="cardSysStatus" style="background:rgba(75,85,99,0.4);color:#9ca3af;border-radius:6px;font-size:0.72rem;padding:3px 10px;">يتحقق...</span>
-                            <button id="btnCardEnable" class="btn-sm-green" onclick="setCardSys(true)" style="display:none;">
-                                <i class="fas fa-toggle-on"></i>🟢 تفعيل النظام
-                            </button>
-                            <button id="btnCardDisable" class="btn-sm-red" onclick="setCardSys(false)" style="display:none;">
-                                <i class="fas fa-toggle-off"></i>🔴 تعطيل النظام
-                            </button>
                             <button class="btn-sm-act" onclick="loadCardData()">
                                 <i class="fas fa-sync-alt"></i>تحديث
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body" style="padding:14px 16px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+                            <button id="btnCardEnable" class="btn-sm-green" onclick="setCardSys(true)"
+                                    style="display:none;flex-direction:column;gap:6px;padding:14px 10px;height:auto;">
+                                <i class="fas fa-power-off fa-lg"></i>
+                                <span>تشغيل النظام</span>
+                            </button>
+                            <button id="btnCardDisable" class="btn-sm-red" onclick="setCardSys(false)"
+                                    style="display:none;flex-direction:column;gap:6px;padding:14px 10px;height:auto;">
+                                <i class="fas fa-power-off fa-lg"></i>
+                                <span>ايقاف النظام</span>
+                            </button>
+                            <button class="btn-sm-act" onclick="openFeatureRestrictPanel()"
+                                    style="flex-direction:column;gap:6px;padding:14px 10px;height:auto;background:rgba(245,158,11,0.15);color:#fcd34d;border:1px solid rgba(245,158,11,0.35);">
+                                <i class="fas fa-lock fa-lg"></i>
+                                <span>تقييد وظيفة محددة</span>
                             </button>
                         </div>
                     </div>
                     <div id="cardStatsInfo" style="padding:6px 16px 10px;font-size:0.75rem;color:var(--muted);border-top:1px solid rgba(99,102,241,0.1);"></div>
                 </div>
 
-                <!-- إنشاء كروت -->
+                <!-- انشاء الكروت -->
                 <div class="panel">
                     <div class="panel-header">
                         <div class="panel-title">
                             <i class="fas fa-plus-circle" style="color:var(--green);"></i>
-                            إنشاء كروت جديدة
+                            انشاء الكروت
                         </div>
                     </div>
                     <div class="panel-body">
@@ -700,32 +713,26 @@
                 </div>
             </div>
 
-                <!-- تقييد الوظائف Pro -->
-                <div class="panel cards-only-panel">
+                <!-- تقييد وظيفة محددة -->
+                <div class="panel cards-only-panel" id="frPanel">
                     <div class="panel-header">
                         <div class="panel-title">
                             <i class="fas fa-lock" style="color:#f59e0b;"></i>
-                            تقييد الوظائف (نظام Pro)
+                            تقييد وظيفة محددة
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;">
-                            <span id="frSysStatus" style="background:rgba(75,85,99,0.4);color:#9ca3af;border-radius:6px;font-size:0.72rem;padding:3px 10px;">يتحقق...</span>
-                            <button id="btnFrEnable" class="btn-sm-green" onclick="setFeatureRestrict(true)" style="display:none;">
-                                <i class="fas fa-toggle-on"></i>تفعيل التقييد
-                            </button>
-                            <button id="btnFrDisable" class="btn-sm-red" onclick="setFeatureRestrict(false)" style="display:none;">
-                                <i class="fas fa-toggle-off"></i>تعطيل التقييد
-                            </button>
-                        </div>
+                        <span id="frSysStatus" style="background:rgba(75,85,99,0.4);color:#9ca3af;border-radius:6px;font-size:0.72rem;padding:3px 10px;">يتحقق...</span>
                     </div>
                     <div class="panel-body" style="padding:14px;">
                         <p style="color:var(--muted);font-size:0.78rem;margin-bottom:12px;">
-                            حدد الوظائف التي تريد تقييدها — ستظهر بشارة <span style="background:#f59e0b;color:#000;border-radius:4px;padding:1px 6px;font-size:0.7rem;font-weight:700;">PRO</span> وتتطلب بطاقة تفعيل لفتحها.
+                            حدد الوظائف و/أو المستخدمين الذين تريد تقييدهم — سيتم تفعيل النظام على هذه العناصر فقط، وتظهر عليها بشارة
+                            <span style="background:#f59e0b;color:#000;border-radius:4px;padding:1px 6px;font-size:0.7rem;font-weight:700;">PRO</span>
+                            وتتطلب بطاقة تفعيل لفتحها.
                         </p>
                         <div id="frFeaturesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:14px;">
                             <div style="color:var(--muted);text-align:center;padding:16px;grid-column:1/-1;"><i class="fas fa-spinner fa-spin me-2"></i>جاري التحميل...</div>
                         </div>
                         <button class="btn-sm-green" onclick="saveFrRestrictions()" style="width:100%;">
-                            <i class="fas fa-save"></i>حفظ إعدادات التقييد
+                            <i class="fas fa-save"></i>حفظ التقييد
                         </button>
                     </div>
                 </div>
@@ -1293,17 +1300,40 @@ async function loadVouchers() {
             return;
         }
         el.innerHTML = d.vouchers.map(v => `
-            <div class="voucher-item">
-                <span class="voucher-code ${v.used ? 'voucher-used' : ''}">${v.code}</span>
-                <div style="display:flex;gap:6px;align-items:center;">
-                    <span class="voucher-plan">${v.plan_name || v.plan}</span>
-                    ${v.used ? '<span style="color:#ef4444;font-size:0.7rem;">✓ مستخدم</span>' : '<span style="color:#6ee7b7;font-size:0.7rem;">○ متاح</span>'}
+            <div class="voucher-item" style="flex-direction:column;align-items:stretch;gap:5px;padding:10px 12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span class="voucher-code ${v.used ? 'voucher-used' : ''}">${v.code}</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <span class="voucher-plan">${v.plan_name || v.plan}</span>
+                        ${v.used ? '<span style="color:#ef4444;font-size:0.7rem;">✓ مستخدم</span>' : '<span style="color:#6ee7b7;font-size:0.7rem;">○ متاح</span>'}
+                    </div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:0.7rem;color:var(--muted);">
+                    <span><i class="fas fa-calendar-plus me-1"></i>أُنشئ: ${v.created_at || '—'}</span>
+                    ${v.used_at ? `<span><i class="fas fa-calendar-check me-1"></i>استُخدم: ${v.used_at}</span>` : ''}
+                    ${v.used_by ? `<span><i class="fas fa-user me-1"></i>بواسطة: ${v.used_by}</span>` : ''}
+                    ${v.remaining_seconds != null ? `<span style="color:#a5b4fc;"><i class="fas fa-hourglass-half me-1"></i>متبقٍ: ${formatRemaining(v.remaining_seconds)}</span>` : ''}
                 </div>
             </div>
         `).join('');
     } catch(e) {
         el.innerHTML = '<div style="color:#fca5a5;text-align:center;padding:16px;">❌ خطأ</div>';
     }
+}
+
+function formatRemaining(seconds) {
+    if (seconds <= 0) return 'منتهٍ';
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d} يوم ${h} ساعة`;
+    if (h > 0) return `${h} ساعة ${m} دقيقة`;
+    return `${m} دقيقة`;
+}
+
+function openFeatureRestrictPanel() {
+    const panel = document.getElementById('frPanel');
+    if (panel) panel.scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 async function loadCardSessions() {
@@ -1342,6 +1372,23 @@ async function setCardSys(enabled) {
 // ── Feature Restrictions ──
 let _frData = {};
 
+const FR_USER_LABELS = {
+    user_1:'👤 المستخدم الأول', user_2:'👤 المستخدم الثاني',
+    user_3:'👤 المستخدم الثالث', user_4:'👤 المستخدم الرابع', user_5:'👤 المستخدم الخامس'
+};
+
+function _frRenderItem(key, label, checked) {
+    return `
+        <label style="display:flex;align-items:center;gap:8px;background:rgba(30,40,60,0.6);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:8px 12px;cursor:pointer;">
+            <input type="checkbox" class="fr-item-cb" value="${key}" ${checked?'checked':''}
+                   onchange="this.parentElement.querySelector('.fr-pro-badge').style.opacity = this.checked ? '1' : '0.3';"
+                   style="width:16px;height:16px;accent-color:#f59e0b;flex-shrink:0;">
+            <span style="font-size:0.82rem;color:#e2e8f0;">${label}</span>
+            <span class="fr-pro-badge" style="margin-right:auto;background:#f59e0b;color:#000;border-radius:4px;padding:1px 5px;font-size:0.65rem;font-weight:700;opacity:${checked?'1':'0.3'};">PRO</span>
+        </label>
+    `;
+}
+
 async function loadFrData() {
     try {
         const r = await fetch('/admin/api/feature_restrictions', {credentials:'same-origin'});
@@ -1349,91 +1396,38 @@ async function loadFrData() {
         if (!d.success) return;
         _frData = d;
         const statusEl = document.getElementById('frSysStatus');
-        const btnEn = document.getElementById('btnFrEnable');
-        const btnDis = document.getElementById('btnFrDisable');
         if (d.enabled) {
             statusEl.style.cssText = 'background:rgba(245,158,11,0.2);color:#fcd34d;border-radius:6px;font-size:0.72rem;padding:3px 10px;';
             statusEl.textContent = '🔒 التقييد مفعّل';
-            btnEn.style.display = 'none'; btnDis.style.display = '';
         } else {
             statusEl.style.cssText = 'background:rgba(75,85,99,0.4);color:#9ca3af;border-radius:6px;font-size:0.72rem;padding:3px 10px;';
             statusEl.textContent = '🔓 التقييد معطّل';
-            btnEn.style.display = ''; btnDis.style.display = 'none';
         }
         const features = d.available_features || {};
         const globalRestr = d.global_restricted || d.restricted || [];
         const userRestr   = d.user_restrictions || {};
-        const userUnlocked= d.user_unlocked || {};
 
         const el = document.getElementById('frFeaturesList');
-        // القسم الأول: الوظائف مع تقييد عام
-        let html = `<div style="font-size:0.75rem;color:var(--muted);margin-bottom:8px;font-weight:600;">
-            🌐 تقييد عام (يطبّق على كل المستخدمين، يمكن فتحه ببطاقة)
-        </div>`;
-        html += Object.entries(features).map(([key, label]) => `
-            <label style="display:flex;align-items:center;gap:8px;background:rgba(30,40,60,0.6);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:8px 12px;cursor:pointer;margin-bottom:4px;">
-                <input type="checkbox" class="fr-global-cb" id="fr_${key}" value="${key}" ${globalRestr.includes(key)?'checked':''} style="width:16px;height:16px;accent-color:#f59e0b;">
-                <span style="font-size:0.82rem;color:#e2e8f0;">${label}</span>
-                <span style="margin-right:auto;background:#f59e0b;color:#000;border-radius:4px;padding:1px 5px;font-size:0.65rem;font-weight:700;opacity:${globalRestr.includes(key)?'1':'0.3'};">PRO</span>
-            </label>
-        `).join('');
-
-        // القسم الثاني: تقييد خاص بكل مستخدم
-        const userLabels = {
-            user_1:'المستخدم الأول', user_2:'المستخدم الثاني',
-            user_3:'المستخدم الثالث', user_4:'المستخدم الرابع', user_5:'المستخدم الخامس'
-        };
-        html += `<div style="font-size:0.75rem;color:var(--muted);margin:14px 0 8px;font-weight:600;">
-            👤 تقييد خاص بمستخدم (أو تعطيل حسابه بالكامل)
-        </div>`;
-        for (const [uid, uname] of Object.entries(userLabels)) {
-            const urestr = userRestr[uid] || [];
-            const allDisabled = urestr.includes('all');
-            const unlocked = userUnlocked[uid] || [];
-            html += `<div style="background:rgba(30,40,60,0.6);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:10px 14px;margin-bottom:6px;">
-                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <span style="font-size:0.82rem;color:#e2e8f0;font-weight:600;">${uname}</span>
-                    <label style="display:flex;align-items:center;gap:5px;font-size:0.75rem;cursor:pointer;">
-                        <input type="checkbox" class="fr-user-all-cb" data-uid="${uid}"
-                               ${allDisabled?'checked':''} style="accent-color:#ef4444;">
-                        <span style="color:#fca5a5;">تعطيل الحساب بالكامل</span>
-                    </label>
-                    <span style="margin-right:auto;font-size:0.7rem;color:#6ee7b7;">مفتوح: ${unlocked.length ? unlocked.join(', ') : '—'}</span>
-                    <button onclick="clearUserUnlocked('${uid}')"
-                            style="font-size:0.68rem;background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);border-radius:5px;padding:2px 8px;cursor:pointer;">
-                        مسح الصلاحيات
-                    </button>
-                </div>
-            </div>`;
-        }
+        let html = Object.entries(features).map(([key, label]) =>
+            _frRenderItem(key, '⚙️ ' + label, globalRestr.includes(key))
+        ).join('');
+        html += Object.entries(FR_USER_LABELS).map(([uid, label]) =>
+            _frRenderItem(uid, label, (userRestr[uid] || []).includes('all'))
+        ).join('');
         el.innerHTML = html;
     } catch(e) { console.error(e); }
 }
 
-async function setFeatureRestrict(enabled) {
-    try {
-        const globalRestr = _frData ? (_frData.global_restricted || _frData.restricted || []) : [];
-        const userRestr   = _frData ? (_frData.user_restrictions || {}) : {};
-        const r = await fetch('/admin/api/feature_restrictions', {
-            method:'POST', credentials:'same-origin',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({enabled, global_restricted: globalRestr, user_restrictions: userRestr})
-        });
-        const d = await r.json();
-        if (d.success) { showToast(d.message); await loadFrData(); }
-    } catch(e) { showToast('❌ خطأ'); }
-}
-
 async function saveFrRestrictions() {
-    const globalCbs  = document.querySelectorAll('.fr-global-cb');
-    const globalRestr = [...globalCbs].filter(c => c.checked).map(c => c.value);
-    const userAllCbs = document.querySelectorAll('.fr-user-all-cb');
-    const userRestr  = {};
-    userAllCbs.forEach(cb => {
-        if (cb.checked) userRestr[cb.dataset.uid] = ['all'];
+    const cbs = document.querySelectorAll('.fr-item-cb');
+    const globalRestr = [];
+    const userRestr = {};
+    cbs.forEach(cb => {
+        if (!cb.checked) return;
+        if (cb.value.startsWith('user_')) userRestr[cb.value] = ['all'];
+        else globalRestr.push(cb.value);
     });
-    const enabled = (_frData && _frData.enabled) ||
-                    (document.getElementById('frSysStatus').textContent || '').includes('مفعّل');
+    const enabled = globalRestr.length > 0 || Object.keys(userRestr).length > 0;
     try {
         const r = await fetch('/admin/api/feature_restrictions', {
             method:'POST', credentials:'same-origin',
@@ -1441,7 +1435,7 @@ async function saveFrRestrictions() {
             body: JSON.stringify({enabled, global_restricted: globalRestr, user_restrictions: userRestr})
         });
         const d = await r.json();
-        showToast(d.success ? d.message : '❌ ' + d.message);
+        showToast(d.success ? '✅ تم حفظ التقييد' : '❌ ' + d.message);
         if (d.success) await loadFrData();
     } catch(e) { showToast('❌ خطأ في الاتصال'); }
 }
