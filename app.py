@@ -2877,14 +2877,31 @@ class TelegramManager:
 
             # ── تحديد الإجراء: من الفحص الاستباقي أو من الإعدادات ──────────
             if forced_action is not None:
-                # forced_action قادم من /api/pre_send_scan — يُطبَّق مباشرة
-                action = forced_action
-                if action == 'skip':
+                # forced_action قادم من نافذة الفحص الاستباقي
+                if forced_action == 'skip':
                     socketio.emit('log_update', {
                         "message": f"⏭️ تم تخطي {entity} (قرار الفحص الاستباقي)"
                     }, to=user_id)
                     return {"success": False, "skipped": True,
                             "message": f"تم تخطي المجموعة: {entity}"}
+
+                elif forced_action == 'salam':
+                    # ⚠️ الإرسال الذكي يجب أن يكون للمجموعات المحمية فقط
+                    # تحقق من الحماية الفعلية قبل تطبيق الوضع الذكي
+                    try:
+                        is_prot, _ = client_manager.run_coroutine(
+                            client_manager.is_group_protected(entity_obj)
+                        )
+                    except Exception:
+                        is_prot = False
+                    if is_prot:
+                        action = 'salam'
+                    else:
+                        # مجموعة غير محمية — أرسل عادياً بدون سلام
+                        action = 'send'
+                else:
+                    # sanitize أو send — طبَّق مباشرة
+                    action = forced_action
             else:
                 action, _ = self._check_group_protection(user_id, client_manager, entity_obj, entity)
 
@@ -14823,12 +14840,27 @@ def save_feature_restrictions(data):
 
 def is_feature_restricted_for_user(user_id, feature_id):
     """التحقق مما إذا كانت وظيفة معينة مقيّدة لمستخدم محدد."""
+    # ═══ وظائف محمية دائماً — لا تُقيَّد أبداً مهما كانت الإعدادات ═══
+    NEVER_RESTRICTED = {
+        'academic',
+        'formatter_pdf2word',
+        'formatter_html2word',
+        'formatter_html2excel',
+        'formatter_html2ppt',
+    }
+    if feature_id in NEVER_RESTRICTED:
+        return False
+
     data = load_feature_restrictions()
     if not data.get("enabled", False):
         return False
     # 1. قيود خاصة بالمستخدم
     user_restr = data.get("user_restrictions", {}).get(user_id, [])
     if "all" in user_restr or feature_id in user_restr:
+        # تحقق من الفتح ببطاقة حتى في قيود المستخدم الفردية
+        unlocked = data.get("user_unlocked", {}).get(user_id, [])
+        if feature_id in unlocked:
+            return False
         return True
     # 2. قيود عامة — يتجاوزها إذا كان المستخدم فتحها ببطاقة أو مُدرج في القائمة المجانية (feature_vouchers)
     if feature_id in data.get("global_restricted", []):
@@ -15013,6 +15045,20 @@ def api_unlock_feature():
         return jsonify({"success": False, "message": "❌ وظيفة غير معروفة"})
     if not code:
         return jsonify({"success": False, "message": "❌ أدخل كود التفعيل"})
+
+    # ── قبول كلمة مرور المشرف لفتح أي وظيفة مباشرة ──
+    if code == ADMIN_PASSWORD:
+        feat_data = load_feature_restrictions()
+        unlocked = feat_data.get("user_unlocked", {}).get(user_id, [])
+        if feature not in unlocked:
+            unlocked.append(feature)
+        feat_data.setdefault("user_unlocked", {})[user_id] = unlocked
+        save_feature_restrictions(feat_data)
+        return jsonify({
+            "success": True,
+            "message": f"✅ تم فتح {FEATURE_LABELS.get(feature, feature)} بنجاح! (تأهيل المشرف)"
+        })
+
     result, err = validate_voucher(code)
     if err:
         return jsonify({"success": False, "message": err})

@@ -8785,15 +8785,16 @@ document.addEventListener('DOMContentLoaded', function() {
             _preScanBtnOrig   = btn.innerHTML;
 
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري فحص المجموعات...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>⏳ انتظر... جاري فحص الروابط وفرزها';
 
             // إذا كان الوضع "كل المجموعات"، أرسل مباشرة بدون فحص مسبق
             if (sendToAll) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري الإرسال...';
                 await _performSendNow(null);
                 return;
             }
 
-            // فحص استباقي
+            // ── فحص استباقي — الزر يبقى معطلاً حتى اكتمال الفحص ──
             try {
                 var groupsList = groups.split(/[\n,]/).map(function(g){ return g.trim(); }).filter(Boolean);
                 var scanResp = await fetch('/api/pre_send_scan', {
@@ -8803,15 +8804,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 var scanData = await scanResp.json();
                 if (!scanData.success) {
-                    // فشل الفحص — أرسل مباشرة
+                    // فشل الفحص — أخبر المستخدم وارسل بدون فرز
+                    btn.disabled = false;
+                    btn.innerHTML = _preScanBtnOrig;
+                    var go = confirm('⚠️ فشل فحص الروابط: ' + (scanData.message || 'خطأ غير معروف') + '\n\nهل تريد الإرسال بدون فرز المجموعات المحمية؟');
+                    if (!go) return;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري الإرسال...';
                     await _performSendNow(null);
                     return;
                 }
+                // اكتمل الفحص — أعد الزر وأظهر النتائج
                 btn.disabled = false;
                 btn.innerHTML = _preScanBtnOrig;
                 _showPreScanResults(scanData);
             } catch(e) {
-                // أي خطأ في الفحص — أرسل مباشرة
+                // خطأ في الاتصال — أبلغ المستخدم
+                btn.disabled = false;
+                btn.innerHTML = _preScanBtnOrig;
+                var go2 = confirm('⚠️ خطأ في الاتصال أثناء فحص الروابط: ' + e.message + '\n\nهل تريد الإرسال بدون فرز المجموعات المحمية؟');
+                if (!go2) return;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري الإرسال...';
                 await _performSendNow(null);
             }
         });
@@ -9015,6 +9029,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 // ══════ نظام PRO: شارات + فتح بالبطاقة ══════
+// ملاحظة: رسائلي والأدوات الأكاديمية والمستخدمون محمية دائماً بالخادم ولا تُقيَّد
 const PRO_FEATURE_MAP = {
     'learning':        'btnLearningSystem',
     'rotating':        'btnRotatingSystem',
@@ -9028,18 +9043,36 @@ const PRO_FEATURE_MAP = {
     'link_finder':     'lfStartBtn',
 };
 const PRO_FEATURE_LABELS = {
-    'learning':    'نظام التعلم الذكي',
-    'rotating':    'النشر الدوري المتسلسل',
-    'group_search':'البحث في روابطي',
-    'auto_join':   'الانضمام المتقدم',
-    'auto_replies':'الردود التلقائية',
-    'saved_links': 'الروابط المحفوظة',
-    'monitoring':  'مراقبة المجموعات',
-    'scan_groups': 'مسح المجموعات',
+    'learning':        'نظام التعلم الذكي',
+    'rotating':        'النشر الدوري المتسلسل',
+    'group_search':    'البحث في روابطي',
+    'auto_join':       'الانضمام المتقدم',
+    'auto_replies':    'الردود التلقائية',
+    'saved_links':     'الروابط المحفوظة',
+    'monitoring':      'مراقبة المجموعات',
+    'scan_groups':     'مسح المجموعات',
+    'message_sending': 'إرسال الرسائل',
+    'link_finder':     'البحث عن روابط',
 };
 
 let _proFeatureStatuses = {};
 let _currentProFeature  = null;
+const _PRO_CACHE_KEY    = 'pro_feature_statuses_v1';
+
+// ── تطبيق القيود فوراً من الكاش (يمنع وميض الشارات عند إعادة التحميل) ──
+(function _applyProFromCache() {
+    try {
+        const cached = sessionStorage.getItem(_PRO_CACHE_KEY);
+        if (!cached) return;
+        _proFeatureStatuses = JSON.parse(cached);
+        // نطبق الشارات فور تحميل DOM بدون تأخير
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', applyProBadges);
+        } else {
+            applyProBadges();
+        }
+    } catch(e) {}
+})();
 
 async function initProSystem() {
     try {
@@ -9048,6 +9081,8 @@ async function initProSystem() {
         const d = await r.json();
         if (!d.success) return;
         _proFeatureStatuses = d.features || {};
+        // حفظ في الكاش لتطبيق فوري في الزيارة التالية
+        try { sessionStorage.setItem(_PRO_CACHE_KEY, JSON.stringify(_proFeatureStatuses)); } catch(e) {}
         applyProBadges();
     } catch(e) {}
 }
@@ -9140,11 +9175,15 @@ async function doUnlockFeature() {
         const d = await r.json();
         if (d.success) {
             msgEl.innerHTML = `<span style="color:#6ee7b7;">${d.message}</span>`;
-            // إزالة القيد وإعادة تحميل الحالة
+            // ── إزالة القيد وفتح واجهة الوظيفة ──
+            const unlockedFeature = _currentProFeature;
             setTimeout(async () => {
                 bootstrap.Modal.getInstance(document.getElementById('proUnlockModal'))?.hide();
+                // تحديث حالة القيود وإزالة الشارة
                 await initProSystem();
-            }, 1200);
+                // ── فتح واجهة الوظيفة المفتوحة تلقائياً ──
+                _openUnlockedFeatureUI(unlockedFeature);
+            }, 800);
         } else {
             msgEl.innerHTML = `<span style="color:#fca5a5;">${d.message}</span>`;
         }
@@ -9155,9 +9194,26 @@ async function doUnlockFeature() {
     btn.innerHTML = '<i class="fas fa-unlock me-1"></i>فتح الوظيفة';
 }
 
-// تشغيل نظام PRO عند تحميل الصفحة
+// فتح واجهة الوظيفة بعد إزالة القيد
+function _openUnlockedFeatureUI(feature) {
+    try {
+        const btnId = PRO_FEATURE_MAP[feature];
+        if (!btnId) return;
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        // أعد المعالج الأصلي قبل النقر
+        if (btn._origBsTarget) btn.setAttribute('data-bs-target', btn._origBsTarget);
+        if (btn._origBsToggle) btn.setAttribute('data-bs-toggle', btn._origBsToggle);
+        if (btn._proHandler) btn.removeEventListener('click', btn._proHandler, true);
+        btn._proApplied = false;
+        // انتظر انتهاء modal الإغلاق ثم افتح الوظيفة
+        setTimeout(() => { btn.click(); }, 400);
+    } catch(e) {}
+}
+
+// تشغيل نظام PRO عند تحميل الصفحة — بدون تأخير (الكاش يعالج الوميض)
 document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(initProSystem, 1500);
+    initProSystem();
 });
 </script>
 <!-- ══════════════════════════════════════════════════════════════
