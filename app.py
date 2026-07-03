@@ -14779,6 +14779,7 @@ FEATURE_LABELS = {
     "auto_join":            "الانضمام المتقدم",
     "auto_replies":         "الردود التلقائية",
     "saved_links":          "الروابط المحفوظة",
+    "sent_messages":        "رسائلي (سجل المرسل)",
     "academic":             "التحليل الأكاديمي الذكي",
     "formatter_pdf2word":   "تحويل PDF إلى Word",
     "formatter_html2word":  "تحويل HTML إلى Word",
@@ -14798,6 +14799,7 @@ RESTRICTED_FEATURES_LIST = [
     {"id": "auto_join",           "name": "🤖 الانضمام المتقدم"},
     {"id": "auto_replies",        "name": "💬 الردود التلقائية"},
     {"id": "saved_links",         "name": "🔗 الروابط المحفوظة"},
+    {"id": "sent_messages",       "name": "📨 رسائلي (سجل المرسل)"},
     {"id": "academic",            "name": "📚 التحليل الأكاديمي الذكي"},
     {"id": "formatter_pdf2word",  "name": "📄 تحويل PDF إلى Word"},
     {"id": "formatter_html2word", "name": "📝 تحويل HTML إلى Word"},
@@ -14840,17 +14842,6 @@ def save_feature_restrictions(data):
 
 def is_feature_restricted_for_user(user_id, feature_id):
     """التحقق مما إذا كانت وظيفة معينة مقيّدة لمستخدم محدد."""
-    # ═══ وظائف محمية دائماً — لا تُقيَّد أبداً مهما كانت الإعدادات ═══
-    NEVER_RESTRICTED = {
-        'academic',
-        'formatter_pdf2word',
-        'formatter_html2word',
-        'formatter_html2excel',
-        'formatter_html2ppt',
-    }
-    if feature_id in NEVER_RESTRICTED:
-        return False
-
     data = load_feature_restrictions()
     if not data.get("enabled", False):
         return False
