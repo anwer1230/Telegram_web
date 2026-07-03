@@ -24,13 +24,13 @@ args = "Flask App"
 name = "Flask App"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python main.py"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && python main.py"
+waitForPort = 5000
 
 [agent]
 stack = "PNPM_WORKSPACE"
@@ -43,9 +43,3 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["cairo", "cargo", "ffmpeg-full", "freetype", "ghostscript", "glibcLocales", "gobject-introspection", "gtk3", "gumbo", "harfbuzz", "jbig2dec", "lcms2", "libev", "libiconv", "libimagequant", "libjpeg", "libjpeg_turbo", "libtiff", "libwebp", "libxcrypt", "mupdf", "openjpeg", "openssl", "pkg-config", "qhull", "rustc", "swig", "tcl", "tk", "xcbuild", "xcodebuild", "xsimd", "zlib"]
-
-[userenv]
-
-[userenv.shared]
-GITHUB_BRANCH = "main"
-GITHUB_REPO = "anwer1230/-Anwer_program"
