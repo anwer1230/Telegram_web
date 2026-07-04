@@ -1,63 +1,45 @@
-# مركز سرعة انجاز للخدمات — Web Browser App
+# [Project name]
 
-تطبيق Flask متكامل لإدارة حسابات تيليجرام، المساعد الذكي، نظام البطاقات، ومنسق الملفات الأكاديمية.
+_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
 
 ## Run & Operate
 
-- `python main.py` — تشغيل التطبيق (المنفذ 5000)
-- Workflow: **Flask App** (يعمل تلقائياً)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run build` — typecheck + build all packages
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
 
-- Python 3.11
-- Flask 3.1.3 + Flask-SocketIO 5.6.1
-- Telethon 1.43.2 (Telegram API)
-- Groq AI API
-- python-pptx, pdfplumber, PyMuPDF (معالجة الملفات)
-- gevent (async mode)
+- pnpm workspaces, Node.js 24, TypeScript 5.9
+- API: Express 5
+- DB: PostgreSQL + Drizzle ORM
+- Validation: Zod (`zod/v4`), `drizzle-zod`
+- API codegen: Orval (from OpenAPI spec)
+- Build: esbuild (CJS bundle)
 
 ## Where things live
 
-- `app.py` — التطبيق الرئيسي (15,000+ سطر)
-- `auth.py` — نظام تسجيل الدخول وإدارة جلسات تيليجرام
-- `main.py` — نقطة التشغيل
-- `templates/` — قوالب HTML
-- `static/` — ملفات JS والأيقونات
-- `data/` — بيانات JSON (البطاقات، الإشعارات، الروابط)
-- `sessions/` — بيانات جلسات المستخدمين
-- `pptx_app/outputs/` — مخرجات العروض التقديمية
+_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
 
 ## Architecture decisions
 
-- Telegram API ID/Hash مضمنة مباشرةً في `auth.py`
-- جلسات تيليجرام تُحفظ في `sessions/` محلياً أو `/tmp/sessions` على Render
-- SocketIO في وضع threading (وليس gevent) لتجنب تعارض asyncio
-- SESSION_SECRET من متغيرات البيئة (مطلوب)
-- GitHub sync اختياري (GITHUB_TOKEN + GITHUB_REPO + GITHUB_BRANCH)
+_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
 
 ## Product
 
-- ① إرسال رسائل مجدولة/فوري عبر حسابات تيليجرام متعددة
-- ② مراقبة كلمات مفتاحية في المجموعات والإرسال التلقائي
-- ③ بوت تعلم ذكي باستخدام Groq AI
-- ④ منشئ عروض PPTX من نص
-- ⑤ تحويل PDF/DOCX/Excel
-- ⑥ نظام بطاقات تفعيل مع لوحة إدارة
-- ⑦ إشعارات Web Push
-- ⑧ حفظ تلقائي للجلسات على GitHub
+_Describe the high-level user-facing capabilities of this app once they exist._
 
 ## User preferences
 
-_لا توجد تفضيلات مسجلة بعد._
+_Populate as you build — explicit user instructions worth remembering across sessions._
 
 ## Gotchas
 
-- GROQ_API_KEY مطلوب لميزات الذكاء الاصطناعي (اختياري لباقي الميزات)
-- GITHUB_TOKEN مطلوب للمزامنة التلقائية مع GitHub (اختياري)
-- SESSION_SECRET مطلوب دائماً (موجود في secrets)
-- لا تغيّر PORT — التطبيق يستخدم 5000 افتراضياً
+_Populate as you build — sharp edges, "always run X before Y" rules._
 
 ## Pointers
 
-- مصدر المستودع: https://github.com/anwer1230/Web-browser
-- `env.example` يحتوي على قائمة جميع متغيرات البيئة المطلوبة
+- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details

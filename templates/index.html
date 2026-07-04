@@ -633,7 +633,7 @@
                                 </button>
                             </div>
                             <div class="col-6 col-md-4">
-                                <button type="button" id="btnSentMessages" class="btn btn-outline-info w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center" data-bs-toggle="modal" data-bs-target="#sentMessagesModal">
+                                <button type="button" class="btn btn-outline-info w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center" data-bs-toggle="modal" data-bs-target="#sentMessagesModal">
                                     <i class="fas fa-envelope fa-2x mb-2"></i>
                                     <span class="small fw-bold">📨 رسائلي</span>
                                     <span id="sentBatchesCount" class="badge bg-primary mt-1" style="font-size:0.6rem;display:none;">0</span>
@@ -905,7 +905,7 @@
                     </div>
                     <div class="card-body py-3">
                         <div class="dropdown">
-                            <button id="btnAcademicTools" class="btn text-white w-100 py-3 fw-bold d-flex align-items-center justify-content-between rounded-3"
+                            <button class="btn text-white w-100 py-3 fw-bold d-flex align-items-center justify-content-between rounded-3"
                                     style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;font-size:1.05rem;"
                                     type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <span><i class="fas fa-tools me-2"></i>اختر الأداة</span>
@@ -8785,16 +8785,15 @@ document.addEventListener('DOMContentLoaded', function() {
             _preScanBtnOrig   = btn.innerHTML;
 
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>⏳ انتظر... جاري فحص الروابط وفرزها';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري فحص المجموعات...';
 
             // إذا كان الوضع "كل المجموعات"، أرسل مباشرة بدون فحص مسبق
             if (sendToAll) {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري الإرسال...';
                 await _performSendNow(null);
                 return;
             }
 
-            // ── فحص استباقي — الزر يبقى معطلاً حتى اكتمال الفحص ──
+            // فحص استباقي
             try {
                 var groupsList = groups.split(/[\n,]/).map(function(g){ return g.trim(); }).filter(Boolean);
                 var scanResp = await fetch('/api/pre_send_scan', {
@@ -8804,28 +8803,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 var scanData = await scanResp.json();
                 if (!scanData.success) {
-                    // فشل الفحص — أخبر المستخدم وارسل بدون فرز
-                    btn.disabled = false;
-                    btn.innerHTML = _preScanBtnOrig;
-                    var go = confirm('⚠️ فشل فحص الروابط: ' + (scanData.message || 'خطأ غير معروف') + '\n\nهل تريد الإرسال بدون فرز المجموعات المحمية؟');
-                    if (!go) return;
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري الإرسال...';
+                    // فشل الفحص — أرسل مباشرة
                     await _performSendNow(null);
                     return;
                 }
-                // اكتمل الفحص — أعد الزر وأظهر النتائج
                 btn.disabled = false;
                 btn.innerHTML = _preScanBtnOrig;
                 _showPreScanResults(scanData);
             } catch(e) {
-                // خطأ في الاتصال — أبلغ المستخدم
-                btn.disabled = false;
-                btn.innerHTML = _preScanBtnOrig;
-                var go2 = confirm('⚠️ خطأ في الاتصال أثناء فحص الروابط: ' + e.message + '\n\nهل تريد الإرسال بدون فرز المجموعات المحمية؟');
-                if (!go2) return;
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري الإرسال...';
+                // أي خطأ في الفحص — أرسل مباشرة
                 await _performSendNow(null);
             }
         });
@@ -9029,61 +9015,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 // ══════ نظام PRO: شارات + فتح بالبطاقة ══════
-// كل الوظائف قابلة للتقييد بما فيها رسائلي والأدوات الأكاديمية
 const PRO_FEATURE_MAP = {
-    'learning':             'btnLearningSystem',
-    'rotating':             'btnRotatingSystem',
-    'group_search':         'btnSearchMyLinksDropdown',
-    'auto_join':            'btnAutoJoinAdvanced',
-    'auto_replies':         'btnAutoReplies',
-    'saved_links':          'btnSavedLinks',
-    'sent_messages':        'btnSentMessages',
-    'academic':             'btnAcademicTools',
-    'formatter_pdf2word':   'btnAcademicTools',
-    'formatter_html2word':  'btnAcademicTools',
-    'formatter_html2excel': 'btnAcademicTools',
-    'formatter_html2ppt':   'btnAcademicTools',
-    'monitoring':           'startMonitoringBtn',
-    'scan_groups':          'scanGroupsBtn',
-    'message_sending':      'sendNowBtn',
-    'link_finder':          'lfStartBtn',
+    'learning':        'btnLearningSystem',
+    'rotating':        'btnRotatingSystem',
+    'group_search':    'btnSearchMyLinksDropdown',
+    'auto_join':       'btnAutoJoinAdvanced',
+    'auto_replies':    'btnAutoReplies',
+    'saved_links':     'btnSavedLinks',
+    'monitoring':      'startMonitoringBtn',
+    'scan_groups':     'scanGroupsBtn',
+    'message_sending': 'sendNowBtn',
+    'link_finder':     'lfStartBtn',
 };
 const PRO_FEATURE_LABELS = {
-    'learning':             'نظام التعلم الذكي',
-    'rotating':             'النشر الدوري المتسلسل',
-    'group_search':         'البحث في روابطي',
-    'auto_join':            'الانضمام المتقدم',
-    'auto_replies':         'الردود التلقائية',
-    'saved_links':          'الروابط المحفوظة',
-    'sent_messages':        'رسائلي (سجل المرسل)',
-    'academic':             'التحليل الأكاديمي الذكي',
-    'formatter_pdf2word':   'تحويل PDF إلى Word',
-    'formatter_html2word':  'تحويل HTML إلى Word',
-    'formatter_html2excel': 'تحويل HTML إلى Excel',
-    'formatter_html2ppt':   'تحويل HTML إلى PPT',
-    'monitoring':           'مراقبة المجموعات',
-    'scan_groups':          'مسح المجموعات',
-    'message_sending':      'إرسال الرسائل',
-    'link_finder':          'البحث عن روابط',
+    'learning':    'نظام التعلم الذكي',
+    'rotating':    'النشر الدوري المتسلسل',
+    'group_search':'البحث في روابطي',
+    'auto_join':   'الانضمام المتقدم',
+    'auto_replies':'الردود التلقائية',
+    'saved_links': 'الروابط المحفوظة',
+    'monitoring':  'مراقبة المجموعات',
+    'scan_groups': 'مسح المجموعات',
 };
 
 let _proFeatureStatuses = {};
 let _currentProFeature  = null;
-const _PRO_CACHE_KEY    = 'pro_feature_statuses_v1';
-
-// ── تطبيق القيود فوراً من الكاش (يمنع وميض الشارات عند إعادة التحميل) ──
-(function _applyProFromCache() {
-    try {
-        const cached = sessionStorage.getItem(_PRO_CACHE_KEY);
-        if (!cached) return;
-        _proFeatureStatuses = JSON.parse(cached);
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', applyProBadges);
-        } else {
-            applyProBadges();
-        }
-    } catch(e) {}
-})();
 
 async function initProSystem() {
     try {
@@ -9092,29 +9048,18 @@ async function initProSystem() {
         const d = await r.json();
         if (!d.success) return;
         _proFeatureStatuses = d.features || {};
-        try { sessionStorage.setItem(_PRO_CACHE_KEY, JSON.stringify(_proFeatureStatuses)); } catch(e) {}
         applyProBadges();
     } catch(e) {}
 }
 
 function applyProBadges() {
-    // اجمع الوظائف حسب الزر — زر واحد قد يضم عدة وظائف (مثل btnAcademicTools)
-    const btnToFeatures = {};
     for (const [feature, btnId] of Object.entries(PRO_FEATURE_MAP)) {
         if (!btnId) continue;
-        if (!btnToFeatures[btnId]) btnToFeatures[btnId] = [];
-        btnToFeatures[btnId].push(feature);
-    }
-    // لكل زر: قيّده إذا كانت أي وظيفة مقيدة، وأزل القيد فقط إذا كانت كلها حرة
-    for (const [btnId, features] of Object.entries(btnToFeatures)) {
         const btn = document.getElementById(btnId);
         if (!btn) continue;
-        const restrictedFeature = features.find(f => {
-            const info = _proFeatureStatuses[f];
-            return info && info.restricted;
-        });
-        if (restrictedFeature) {
-            applyProBadgeToBtn(btn, restrictedFeature);
+        const info = _proFeatureStatuses[feature];
+        if (info && info.restricted) {
+            applyProBadgeToBtn(btn, feature);
         } else {
             removeProBadge(btn);
         }
@@ -9195,13 +9140,11 @@ async function doUnlockFeature() {
         const d = await r.json();
         if (d.success) {
             msgEl.innerHTML = `<span style="color:#6ee7b7;">${d.message}</span>`;
-            // ── إزالة القيد وفتح واجهة الوظيفة ──
-            const unlockedFeature = _currentProFeature;
+            // إزالة القيد وإعادة تحميل الحالة
             setTimeout(async () => {
                 bootstrap.Modal.getInstance(document.getElementById('proUnlockModal'))?.hide();
                 await initProSystem();
-                _openUnlockedFeatureUI(unlockedFeature);
-            }, 800);
+            }, 1200);
         } else {
             msgEl.innerHTML = `<span style="color:#fca5a5;">${d.message}</span>`;
         }
@@ -9212,24 +9155,9 @@ async function doUnlockFeature() {
     btn.innerHTML = '<i class="fas fa-unlock me-1"></i>فتح الوظيفة';
 }
 
-// فتح واجهة الوظيفة بعد إزالة القيد
-function _openUnlockedFeatureUI(feature) {
-    try {
-        const btnId = PRO_FEATURE_MAP[feature];
-        if (!btnId) return;
-        const btn = document.getElementById(btnId);
-        if (!btn) return;
-        if (btn._origBsTarget) btn.setAttribute('data-bs-target', btn._origBsTarget);
-        if (btn._origBsToggle) btn.setAttribute('data-bs-toggle', btn._origBsToggle);
-        if (btn._proHandler) btn.removeEventListener('click', btn._proHandler, true);
-        btn._proApplied = false;
-        setTimeout(() => { btn.click(); }, 400);
-    } catch(e) {}
-}
-
-// تشغيل نظام PRO عند تحميل الصفحة — بدون تأخير (الكاش يعالج الوميض)
+// تشغيل نظام PRO عند تحميل الصفحة
 document.addEventListener('DOMContentLoaded', function() {
-    initProSystem();
+    setTimeout(initProSystem, 1500);
 });
 </script>
 <!-- ══════════════════════════════════════════════════════════════

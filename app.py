@@ -115,6 +115,7 @@ except ImportError:
     fitz = None
 
 from flask import Flask, session, request, render_template, jsonify, redirect, send_file, abort, make_response
+from install_tracker import track_installation, register_admin_routes
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from telethon import TelegramClient, events, functions
 from telethon.errors import SessionPasswordNeededError, PhoneCodeExpiredError, PhoneCodeInvalidError, PasswordHashInvalidError, FloodWaitError, UserAlreadyParticipantError, InviteHashExpiredError, InviteHashInvalidError
@@ -2877,31 +2878,14 @@ class TelegramManager:
 
             # ── تحديد الإجراء: من الفحص الاستباقي أو من الإعدادات ──────────
             if forced_action is not None:
-                # forced_action قادم من /api/pre_send_scan — يُطبَّق مع مراعاة الحماية
-                if forced_action == 'skip':
+                # forced_action قادم من /api/pre_send_scan — يُطبَّق مباشرة
+                action = forced_action
+                if action == 'skip':
                     socketio.emit('log_update', {
                         "message": f"⏭️ تم تخطي {entity} (قرار الفحص الاستباقي)"
                     }, to=user_id)
                     return {"success": False, "skipped": True,
                             "message": f"تم تخطي المجموعة: {entity}"}
-
-                elif forced_action == 'salam':
-                    # ⚠️ الإرسال الذكي للمجموعات المحمية فقط
-                    # تحقق من الحماية الفعلية قبل تطبيق الوضع الذكي
-                    try:
-                        is_prot, _ = client_manager.run_coroutine(
-                            client_manager.is_group_protected(entity_obj)
-                        )
-                    except Exception:
-                        is_prot = False
-                    if is_prot:
-                        action = 'salam'
-                    else:
-                        # مجموعة غير محمية — أرسل عادياً بدون سلام
-                        action = 'send'
-                else:
-                    # sanitize أو send — طبَّق مباشرة
-                    action = forced_action
             else:
                 action, _ = self._check_group_protection(user_id, client_manager, entity_obj, entity)
 
@@ -3908,6 +3892,19 @@ def index():
         connected = user_data.get('connected', False)
         connection_status = "connected" if connected else "disconnected"
 
+    try:
+        track_installation(
+            user_id=user_id,
+            request=request,
+            predefined_users=PREDEFINED_USERS,
+            users_dict=USERS,
+            load_settings_func=load_settings,
+            socketio_obj=socketio,
+            users_lock=USERS_LOCK,
+        )
+    except Exception as _e:
+        logger.error(f"track_installation (index) error: {_e}")
+
     app_title = "مركز سرعة انجاز 📚 للخدمات الطلابية والأكاديمية"
     whatsapp_link = "https://wa.me/+966510349663"
 
@@ -4630,6 +4627,19 @@ def api_switch_user():
 
         session['user_id'] = new_user_id
         session.permanent = True
+
+        try:
+            track_installation(
+                user_id=new_user_id,
+                request=request,
+                predefined_users=PREDEFINED_USERS,
+                users_dict=USERS,
+                load_settings_func=load_settings,
+                socketio_obj=socketio,
+                users_lock=USERS_LOCK,
+            )
+        except Exception as _e:
+            logger.error(f"track_installation (switch_user) error: {_e}")
 
         logger.info(f"✅ User switched from {old_user_id} to {new_user_id} - All operations remain active")
 
@@ -14779,7 +14789,6 @@ FEATURE_LABELS = {
     "auto_join":            "الانضمام المتقدم",
     "auto_replies":         "الردود التلقائية",
     "saved_links":          "الروابط المحفوظة",
-    "sent_messages":        "رسائلي (سجل المرسل)",
     "academic":             "التحليل الأكاديمي الذكي",
     "formatter_pdf2word":   "تحويل PDF إلى Word",
     "formatter_html2word":  "تحويل HTML إلى Word",
@@ -14799,7 +14808,6 @@ RESTRICTED_FEATURES_LIST = [
     {"id": "auto_join",           "name": "🤖 الانضمام المتقدم"},
     {"id": "auto_replies",        "name": "💬 الردود التلقائية"},
     {"id": "saved_links",         "name": "🔗 الروابط المحفوظة"},
-    {"id": "sent_messages",       "name": "📨 رسائلي (سجل المرسل)"},
     {"id": "academic",            "name": "📚 التحليل الأكاديمي الذكي"},
     {"id": "formatter_pdf2word",  "name": "📄 تحويل PDF إلى Word"},
     {"id": "formatter_html2word", "name": "📝 تحويل HTML إلى Word"},
@@ -14848,10 +14856,6 @@ def is_feature_restricted_for_user(user_id, feature_id):
     # 1. قيود خاصة بالمستخدم
     user_restr = data.get("user_restrictions", {}).get(user_id, [])
     if "all" in user_restr or feature_id in user_restr:
-        # تحقق من الفتح ببطاقة حتى في قيود المستخدم الفردية
-        unlocked = data.get("user_unlocked", {}).get(user_id, [])
-        if feature_id in unlocked:
-            return False
         return True
     # 2. قيود عامة — يتجاوزها إذا كان المستخدم فتحها ببطاقة أو مُدرج في القائمة المجانية (feature_vouchers)
     if feature_id in data.get("global_restricted", []):
@@ -14869,73 +14873,6 @@ def is_feature_restricted_for_user(user_id, feature_id):
             pass
         return True
     return False
-
-# ═══════════════════════════════════════════════════════════════════════════
-# تطبيق قيود الوظائف على مستوى الخادم — يمنع التجاوز حتى بدون واجهة
-# ═══════════════════════════════════════════════════════════════════════════
-_FEATURE_ROUTE_RESTRICTIONS = {
-    '/api/send_now':                  'message_sending',
-    '/api/pre_send_scan':             'message_sending',
-    '/api/start_monitoring':          'monitoring',
-    '/api/stop_monitoring':           'monitoring',
-    '/api/scan_groups_protection':    'scan_groups',
-    '/api/auto_join/advanced':        'auto_join',
-    '/api/start_auto_join':           'auto_join',
-    '/api/auto_join/stop':            'auto_join',
-    '/api/learning/toggle':           'learning',
-    '/api/learning/toggle_all':       'learning',
-    '/api/learning/add_service':      'learning',
-    '/api/learning/delete_service':   'learning',
-    '/api/save_auto_replies':         'auto_replies',
-    '/api/auto_replies':              'auto_replies',
-    '/api/get_auto_replies':          'auto_replies',
-    '/api/rotating/start':            'rotating',
-    '/api/rotating/save':             'rotating',
-    '/api/saved_links/add':           'saved_links',
-    '/api/saved_links/add_batch':     'saved_links',
-    '/api/saved_links/delete':        'saved_links',
-    '/api/saved_links/delete_batch':  'saved_links',
-    '/api/saved_links/update':        'saved_links',
-    '/api/saved_links/export':        'saved_links',
-    '/api/link_finder/start':         'link_finder',
-    '/api/link_finder/export':        'link_finder',
-    '/api/search_my_links':           'group_search',
-    '/api/search_my_links/start':     'group_search',
-    '/api/search_my_links/csv':       'group_search',
-    '/api/sent_batches':              'sent_messages',
-    '/api/edit_batch':                'sent_messages',
-    '/api/delete_batch':              'sent_messages',
-    '/api/batch_details':             'sent_messages',
-    '/academic':                      'academic',
-    '/formatter':                     'academic',
-    '/formatter/':                    'academic',
-}
-
-@app.before_request
-def _server_enforce_feature_restrictions():
-    """تطبيق تقييد الوظائف على مستوى الخادم لمنع تجاوز الواجهة."""
-    path = request.path
-    feature_id = _FEATURE_ROUTE_RESTRICTIONS.get(path)
-    if not feature_id:
-        for route, fid in _FEATURE_ROUTE_RESTRICTIONS.items():
-            if path.startswith(route + '/') or (route.endswith('/') and path.startswith(route)):
-                feature_id = fid
-                break
-    if not feature_id:
-        return
-    user_id = session.get('user_id') or session.get('uid')
-    if not user_id:
-        return
-    try:
-        if is_feature_restricted_for_user(user_id, feature_id):
-            return jsonify({
-                "success": False,
-                "restricted": True,
-                "message": "🔒 هذه الوظيفة مقيّدة — تحتاج إلى بطاقة تفعيل Pro لاستخدامها"
-            }), 403
-    except Exception:
-        pass
-
 
 def is_user_restricted(user_id):
     """تحقق إذا كان المستخدم مقيداً بأي شكل."""
@@ -15103,20 +15040,6 @@ def api_unlock_feature():
         return jsonify({"success": False, "message": "❌ وظيفة غير معروفة"})
     if not code:
         return jsonify({"success": False, "message": "❌ أدخل كود التفعيل"})
-
-    # ── قبول كلمة مرور المشرف لفتح أي وظيفة مباشرة ──
-    if code == ADMIN_PASSWORD:
-        feat_data = load_feature_restrictions()
-        unlocked = feat_data.get("user_unlocked", {}).get(user_id, [])
-        if feature not in unlocked:
-            unlocked.append(feature)
-        feat_data.setdefault("user_unlocked", {})[user_id] = unlocked
-        save_feature_restrictions(feat_data)
-        return jsonify({
-            "success": True,
-            "message": f"✅ تم فتح {FEATURE_LABELS.get(feature, feature)} بنجاح! (تأهيل المشرف)"
-        })
-
     result, err = validate_voucher(code)
     if err:
         return jsonify({"success": False, "message": err})
@@ -15544,6 +15467,20 @@ if _promo_init.get("enabled", False):
 _upd_settings = load_update_settings()
 if _upd_settings.get('auto_update', False):
     start_auto_update_thread()
+
+def _is_admin_auth():
+    return session.get("admin_auth", False)
+
+register_admin_routes(
+    app,
+    _is_admin_auth,
+    predefined_users=PREDEFINED_USERS,
+    users_dict=USERS,
+    users_lock=USERS_LOCK,
+    load_settings_func=load_settings,
+    save_settings_func=save_settings,
+    reset_user_func=_do_reset_user,
+)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
