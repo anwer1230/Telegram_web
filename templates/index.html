@@ -9077,7 +9077,6 @@ const _PRO_CACHE_KEY    = 'pro_feature_statuses_v1';
         const cached = sessionStorage.getItem(_PRO_CACHE_KEY);
         if (!cached) return;
         _proFeatureStatuses = JSON.parse(cached);
-        // نطبق الشارات فور تحميل DOM بدون تأخير
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', applyProBadges);
         } else {
@@ -9093,25 +9092,23 @@ async function initProSystem() {
         const d = await r.json();
         if (!d.success) return;
         _proFeatureStatuses = d.features || {};
-        // حفظ في الكاش لتطبيق فوري في الزيارة التالية
         try { sessionStorage.setItem(_PRO_CACHE_KEY, JSON.stringify(_proFeatureStatuses)); } catch(e) {}
         applyProBadges();
     } catch(e) {}
 }
 
 function applyProBadges() {
-    // ── خطوة 1: اجمع الوظائف حسب الزر (زر واحد قد يضم عدة وظائف) ──
+    // اجمع الوظائف حسب الزر — زر واحد قد يضم عدة وظائف (مثل btnAcademicTools)
     const btnToFeatures = {};
     for (const [feature, btnId] of Object.entries(PRO_FEATURE_MAP)) {
         if (!btnId) continue;
         if (!btnToFeatures[btnId]) btnToFeatures[btnId] = [];
         btnToFeatures[btnId].push(feature);
     }
-    // ── خطوة 2: لكل زر، تحقق إن كانت أي وظيفة مقيدة ──
+    // لكل زر: قيّده إذا كانت أي وظيفة مقيدة، وأزل القيد فقط إذا كانت كلها حرة
     for (const [btnId, features] of Object.entries(btnToFeatures)) {
         const btn = document.getElementById(btnId);
         if (!btn) continue;
-        // ابحث عن أول وظيفة مقيدة لهذا الزر
         const restrictedFeature = features.find(f => {
             const info = _proFeatureStatuses[f];
             return info && info.restricted;
@@ -9202,9 +9199,7 @@ async function doUnlockFeature() {
             const unlockedFeature = _currentProFeature;
             setTimeout(async () => {
                 bootstrap.Modal.getInstance(document.getElementById('proUnlockModal'))?.hide();
-                // تحديث حالة القيود وإزالة الشارة
                 await initProSystem();
-                // ── فتح واجهة الوظيفة المفتوحة تلقائياً ──
                 _openUnlockedFeatureUI(unlockedFeature);
             }, 800);
         } else {
@@ -9224,12 +9219,10 @@ function _openUnlockedFeatureUI(feature) {
         if (!btnId) return;
         const btn = document.getElementById(btnId);
         if (!btn) return;
-        // أعد المعالج الأصلي قبل النقر
         if (btn._origBsTarget) btn.setAttribute('data-bs-target', btn._origBsTarget);
         if (btn._origBsToggle) btn.setAttribute('data-bs-toggle', btn._origBsToggle);
         if (btn._proHandler) btn.removeEventListener('click', btn._proHandler, true);
         btn._proApplied = false;
-        // انتظر انتهاء modal الإغلاق ثم افتح الوظيفة
         setTimeout(() => { btn.click(); }, 400);
     } catch(e) {}
 }

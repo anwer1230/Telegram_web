@@ -2877,7 +2877,7 @@ class TelegramManager:
 
             # ── تحديد الإجراء: من الفحص الاستباقي أو من الإعدادات ──────────
             if forced_action is not None:
-                # forced_action قادم من نافذة الفحص الاستباقي
+                # forced_action قادم من /api/pre_send_scan — يُطبَّق مع مراعاة الحماية
                 if forced_action == 'skip':
                     socketio.emit('log_update', {
                         "message": f"⏭️ تم تخطي {entity} (قرار الفحص الاستباقي)"
@@ -2886,7 +2886,7 @@ class TelegramManager:
                             "message": f"تم تخطي المجموعة: {entity}"}
 
                 elif forced_action == 'salam':
-                    # ⚠️ الإرسال الذكي يجب أن يكون للمجموعات المحمية فقط
+                    # ⚠️ الإرسال الذكي للمجموعات المحمية فقط
                     # تحقق من الحماية الفعلية قبل تطبيق الوضع الذكي
                     try:
                         is_prot, _ = client_manager.run_coroutine(
@@ -14874,50 +14874,38 @@ def is_feature_restricted_for_user(user_id, feature_id):
 # تطبيق قيود الوظائف على مستوى الخادم — يمنع التجاوز حتى بدون واجهة
 # ═══════════════════════════════════════════════════════════════════════════
 _FEATURE_ROUTE_RESTRICTIONS = {
-    # إرسال الرسائل
     '/api/send_now':                  'message_sending',
     '/api/pre_send_scan':             'message_sending',
-    # مراقبة المجموعات
     '/api/start_monitoring':          'monitoring',
     '/api/stop_monitoring':           'monitoring',
-    # مسح المجموعات
     '/api/scan_groups_protection':    'scan_groups',
-    # الانضمام المتقدم
     '/api/auto_join/advanced':        'auto_join',
     '/api/start_auto_join':           'auto_join',
     '/api/auto_join/stop':            'auto_join',
-    # نظام التعلم الذكي
     '/api/learning/toggle':           'learning',
     '/api/learning/toggle_all':       'learning',
     '/api/learning/add_service':      'learning',
     '/api/learning/delete_service':   'learning',
-    # الردود التلقائية
     '/api/save_auto_replies':         'auto_replies',
     '/api/auto_replies':              'auto_replies',
     '/api/get_auto_replies':          'auto_replies',
-    # النشر الدوري المتسلسل
     '/api/rotating/start':            'rotating',
     '/api/rotating/save':             'rotating',
-    # الروابط المحفوظة
     '/api/saved_links/add':           'saved_links',
     '/api/saved_links/add_batch':     'saved_links',
     '/api/saved_links/delete':        'saved_links',
     '/api/saved_links/delete_batch':  'saved_links',
     '/api/saved_links/update':        'saved_links',
     '/api/saved_links/export':        'saved_links',
-    # محرك البحث عن الروابط
     '/api/link_finder/start':         'link_finder',
     '/api/link_finder/export':        'link_finder',
-    # البحث في روابطي
     '/api/search_my_links':           'group_search',
     '/api/search_my_links/start':     'group_search',
     '/api/search_my_links/csv':       'group_search',
-    # رسائلي (سجل المرسل)
     '/api/sent_batches':              'sent_messages',
     '/api/edit_batch':                'sent_messages',
     '/api/delete_batch':              'sent_messages',
     '/api/batch_details':             'sent_messages',
-    # الأدوات الأكاديمية
     '/academic':                      'academic',
     '/formatter':                     'academic',
     '/formatter/':                    'academic',
@@ -14927,22 +14915,17 @@ _FEATURE_ROUTE_RESTRICTIONS = {
 def _server_enforce_feature_restrictions():
     """تطبيق تقييد الوظائف على مستوى الخادم لمنع تجاوز الواجهة."""
     path = request.path
-
-    # ابحث عن تطابق مباشر أو ببادئة (مثل /formatter/*)
     feature_id = _FEATURE_ROUTE_RESTRICTIONS.get(path)
     if not feature_id:
         for route, fid in _FEATURE_ROUTE_RESTRICTIONS.items():
             if path.startswith(route + '/') or (route.endswith('/') and path.startswith(route)):
                 feature_id = fid
                 break
-
     if not feature_id:
-        return  # مسار غير مقيّد
-
+        return
     user_id = session.get('user_id') or session.get('uid')
     if not user_id:
-        return  # تُعالج المصادقة من قِبل المسار المعني
-
+        return
     try:
         if is_feature_restricted_for_user(user_id, feature_id):
             return jsonify({
@@ -14951,7 +14934,7 @@ def _server_enforce_feature_restrictions():
                 "message": "🔒 هذه الوظيفة مقيّدة — تحتاج إلى بطاقة تفعيل Pro لاستخدامها"
             }), 403
     except Exception:
-        pass  # لا نوقف الطلب عند خطأ في فحص القيود
+        pass
 
 
 def is_user_restricted(user_id):

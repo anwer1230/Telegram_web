@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-3.11"]
+modules = ["nodejs-24", "python-base-3.13"]
 
 [deployment]
 router = "application"
@@ -43,9 +43,3 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["cairo", "cargo", "ffmpeg-full", "freetype", "ghostscript", "glibcLocales", "gobject-introspection", "gtk3", "gumbo", "harfbuzz", "jbig2dec", "lcms2", "libev", "libiconv", "libimagequant", "libjpeg", "libjpeg_turbo", "libtiff", "libwebp", "libxcrypt", "mupdf", "openjpeg", "openssl", "pkg-config", "qhull", "rustc", "swig", "tcl", "tk", "xcbuild", "xcodebuild", "xsimd", "zlib"]
-
-[userenv]
-
-[userenv.shared]
-GITHUB_BRANCH = "main"
-GITHUB_REPO = "anwer1230/-Anwer_program"
