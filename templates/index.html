@@ -332,6 +332,31 @@
       <div class="spinner-border text-light mt-3" role="status"></div>
     </div>
     <script>
+    // ══ إعداد معرف التثبيت (install_id) وإرساله مع كل طلب ══════════════
+    (function() {
+        let _installId = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('install_id='));
+        if (_installId) _installId = _installId.split('=')[1];
+        if (!_installId) {
+            _installId = 'ls-' + ([...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2,'0')).join(''));
+            document.cookie = 'install_id=' + _installId + ';path=/;max-age=31536000;SameSite=Lax';
+        }
+        window._INSTALL_ID = _installId;
+        // تجاوز fetch لإضافة هيدر X-Install-ID تلقائياً لكل الطلبات
+        const _origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            opts = opts || {};
+            opts.headers = opts.headers || {};
+            if (typeof opts.headers.set === 'function') {
+                opts.headers.set('X-Install-ID', _installId);
+            } else {
+                opts.headers['X-Install-ID'] = _installId;
+            }
+            return _origFetch.call(this, url, opts);
+        };
+    })();
+    // ══════════════════════════════════════════════════════════════════════
+</script>
+    <script>
       function __hideSplash() {
         const s = document.getElementById('splashScreen');
         if (s) { s.style.opacity = '0'; setTimeout(() => s.remove(), 700); }
