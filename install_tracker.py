@@ -87,10 +87,18 @@ def track_installation(user_id, request, predefined_users, users_dict,
     if not user_id or user_id not in predefined_users:
         return None
 
-    # 🔥 التعديل الجوهري: قراءة المعرف من هيدر العميل أولاً
+    # قراءة المعرف بالأولوية: هيدر X-Install-ID → كوكيز → IP+UA كبديل ثابت → UUID جديد
     install_id = request.headers.get('X-Install-ID')
     if not install_id:
-        install_id = str(uuid.uuid4())
+        install_id = request.cookies.get('install_id')
+    if not install_id:
+        # بناء معرّف شبه ثابت من IP + User-Agent لاكتشاف الزوار الجدد فوراً
+        ip_raw = request.headers.get('X-Forwarded-For', request.remote_addr) or ''
+        ua_raw = request.headers.get('User-Agent', '') or ''
+        fingerprint = ip_raw.split(',')[0].strip() + '|' + ua_raw[:80]
+        import hashlib
+        install_id = 'fp-' + hashlib.sha256(fingerprint.encode()).hexdigest()[:24]
+    is_cookie_based = not request.headers.get('X-Install-ID')
 
     try:
         data = load_user_sessions()
@@ -156,10 +164,11 @@ def track_installation(user_id, request, predefined_users, users_dict,
             except Exception as e:
                 logger.error(f"فشل إرسال إشعار التثبيت: {e}")
 
-        return record
+        # إرجاع tuple يحتوي على (السجل، هل هو جديد، معرف التثبيت) ليتمكن الطالب من ضبط الكوكيز
+        return record, is_new, install_id
     except Exception as e:
         logger.error(f"track_installation error: {e}")
-        return None
+        return None, False, None
 
 
 def register_admin_routes(app, get_admin_auth_func, predefined_users, users_dict,
