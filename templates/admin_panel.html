@@ -409,6 +409,7 @@
         <a class="nav-item" onclick="showSection('promo')" href="#"><i class="fas fa-bell"></i><span>الإشعارات الدورية</span></a>
         <a class="nav-item" onclick="showSection('invites')" href="#"><i class="fas fa-link"></i><span>روابط الدعوة</span></a>
         <a class="nav-item" onclick="showSection('files')" href="#"><i class="fas fa-folder-open"></i><span>متصفح الملفات</span></a>
+        <a class="nav-item" onclick="showSection('installations')" href="#"><i class="fas fa-mobile-alt"></i><span>التثبيتات</span></a>
         <a class="nav-item" onclick="showSection('system')" href="#"><i class="fas fa-cog"></i><span>إعدادات النظام</span></a>
         <div class="sidebar-footer">
             <button class="btn-logout" onclick="doLogout()"><i class="fas fa-sign-out-alt"></i>خروج</button>
@@ -662,6 +663,51 @@
                 </div>
             </div>
 
+            <!-- ────────────── قسم التثبيتات ────────────── -->
+            <div id="sec-installations" class="section-pane fade-up" style="display:none;">
+                <div class="stats-grid" id="installsStats"></div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title"><i class="fas fa-mobile-alt" style="color:var(--cyan);"></i>التثبيتات النشطة</div>
+                        <button class="btn-sm-act" onclick="loadInstallations()"><i class="fas fa-sync-alt"></i>تحديث</button>
+                    </div>
+                    <div class="panel-body" style="padding:0;">
+                        <div id="installsTable" style="overflow-x:auto;">
+                            <div style="padding:40px;text-align:center;color:var(--indigo);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- تفاصيل التثبيت المحدد -->
+                <div id="installDetailPanel" style="display:none;">
+                    <div class="panel" style="margin-top:14px;">
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fas fa-users" style="color:var(--green);"></i>مستخدمو التثبيت: <span id="installDetailId" style="color:#a5b4fc;font-size:0.8rem;"></span></div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <button class="btn-sm-act" onclick="refreshInstallDetail()"><i class="fas fa-sync-alt"></i>تحديث</button>
+                                <button class="btn-sm-red" onclick="document.getElementById('installDetailPanel').style.display='none'"><i class="fas fa-times"></i>إغلاق</button>
+                            </div>
+                        </div>
+                        <div class="panel-body" style="padding:0;overflow-x:auto;">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+                                <thead>
+                                    <tr style="background:rgba(99,102,241,0.1);border-bottom:1px solid var(--border);">
+                                        <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">المستخدم</th>
+                                        <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">📱 رقم الجوال</th>
+                                        <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">👤 اسم التليجرام</th>
+                                        <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">🟢 الحالة</th>
+                                        <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">⏱️ وقت الاتصال</th>
+                                        <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">⏱️ آخر ظهور</th>
+                                        <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="installUsersBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- إعدادات النظام -->
             <div id="sec-system" class="section-pane fade-up" style="display:none;">
                 <div class="stats-grid">
@@ -715,6 +761,7 @@
         <a class="nav-item" onclick="showSection('promo');toggleMobileSidebar();" href="#"><i class="fas fa-bell"></i><span>الإشعارات الدورية</span></a>
         <a class="nav-item" onclick="showSection('invites');toggleMobileSidebar();" href="#"><i class="fas fa-link"></i><span>روابط الدعوة</span></a>
         <a class="nav-item" onclick="showSection('files');toggleMobileSidebar();" href="#"><i class="fas fa-folder-open"></i><span>متصفح الملفات</span></a>
+        <a class="nav-item" onclick="showSection('installations');toggleMobileSidebar();" href="#"><i class="fas fa-mobile-alt"></i><span>التثبيتات</span></a>
         <a class="nav-item" onclick="showSection('system');toggleMobileSidebar();" href="#"><i class="fas fa-cog"></i><span>إعدادات النظام</span></a>
         <div style="padding:16px 20px;border-top:1px solid var(--border);margin-top:auto;">
             <button class="btn-logout" onclick="doLogout()"><i class="fas fa-sign-out-alt"></i>خروج</button>
@@ -808,6 +855,7 @@ const _sectionTitles = {
     notifications: 'الإشعارات',
     promo: 'الإشعارات الدورية',
     files: 'متصفح الملفات',
+    installations: 'التثبيتات',
     system: 'إعدادات النظام'
 };
 
@@ -836,6 +884,10 @@ function showSection(id) {
         promoLoad();
         document.getElementById('promoTextarea').dataset.loaded = '1';
     }
+    if (id === 'installations' && !document.getElementById('installsTable').dataset.loaded) {
+        loadInstallations();
+        document.getElementById('installsTable').dataset.loaded = '1';
+    }
     return false;
 }
 
@@ -844,6 +896,7 @@ function refreshCurrentSection() {
     else if (_currentSection === 'cards') loadCardData();
     else if (_currentSection === 'promo') promoLoad();
     else if (_currentSection === 'files') loadFiles();
+    else if (_currentSection === 'installations') loadInstallations();
 }
 
 function toggleMobileSidebar() {
@@ -1690,6 +1743,244 @@ async function unlockFeatureWithVoucher(feature, code) {
 // ══════════════════════════════════════════════════════════
 //  التهيئة
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+//  التثبيتات – عرض وإدارة الأجهزة المثبت عليها التطبيق
+// ══════════════════════════════════════════════════════════
+let _currentInstall = null;
+
+async function loadInstallations() {
+    const tbl = document.getElementById('installsTable');
+    const statsEl = document.getElementById('installsStats');
+    tbl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--indigo);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+    try {
+        const r = await fetch('/admin/api/installations', {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.success) {
+            tbl.innerHTML = `<div style="padding:24px;color:#fca5a5;text-align:center;">❌ ${d.message || 'خطأ في التحميل'}</div>`;
+            return;
+        }
+        const insts = d.installations || [];
+        const active = insts.filter(i => i.is_active).length;
+        if (statsEl) statsEl.innerHTML = `
+            <div class="stat-card"><div class="stat-icon" style="background:rgba(6,182,212,0.15);">📱</div>
+                <div><div class="stat-val">${insts.length}</div><div class="stat-lbl">إجمالي التثبيتات</div></div></div>
+            <div class="stat-card"><div class="stat-icon" style="background:rgba(16,185,129,0.15);">🟢</div>
+                <div><div class="stat-val" style="color:#6ee7b7;">${active}</div><div class="stat-lbl">نشط الآن</div></div></div>
+            <div class="stat-card"><div class="stat-icon" style="background:rgba(99,102,241,0.15);">👥</div>
+                <div><div class="stat-val" style="color:#a5b4fc;">${insts.reduce((s,i)=>s+Object.keys(i.users_state||{}).length,0)}</div><div class="stat-lbl">إجمالي المستخدمين</div></div></div>
+        `;
+        if (!insts.length) {
+            tbl.innerHTML = '<div style="padding:24px;color:var(--muted);text-align:center;"><i class="fas fa-mobile-alt me-2"></i>لا توجد تثبيتات مسجلة</div>';
+            return;
+        }
+        let h = `<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+            <thead><tr style="background:rgba(99,102,241,0.1);border-bottom:1px solid var(--border);">
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">معرف الجهاز</th>
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">IP</th>
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">المتصفح</th>
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">المستخدمون</th>
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">الحالة</th>
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">آخر ظهور</th>
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">الإجراءات</th>
+            </tr></thead><tbody>`;
+        insts.forEach(inst => {
+            const usersCount = Object.keys(inst.users_state || {}).length;
+            const connectedCount = Object.values(inst.users_state || {}).filter(u => u.connected).length;
+            const lastSeen = inst.last_seen ? new Date(inst.last_seen).toLocaleString('ar-SA') : '—';
+            const ua = (inst.user_agent || '').slice(0,40);
+            h += `<tr style="border-bottom:1px solid rgba(99,102,241,0.07);transition:background 0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.05)'" onmouseout="this.style.background=''">
+                <td style="padding:8px 12px;font-family:monospace;color:#c4c9d4;font-size:0.75rem;">${inst.install_id?.slice(0,12)}...</td>
+                <td style="padding:8px 12px;color:#94a3b8;font-size:0.75rem;">${inst.ip || '—'}</td>
+                <td style="padding:8px 12px;color:#6b7280;font-size:0.72rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${inst.user_agent || ''}">${ua}</td>
+                <td style="padding:8px 12px;text-align:center;">
+                    <span style="background:rgba(99,102,241,0.15);color:#a5b4fc;border-radius:6px;padding:2px 8px;font-size:0.75rem;">${usersCount} 👤</span>
+                    ${connectedCount > 0 ? `<span style="background:rgba(16,185,129,0.15);color:#6ee7b7;border-radius:6px;padding:2px 6px;font-size:0.72rem;margin-right:4px;">${connectedCount} 🟢</span>` : ''}
+                </td>
+                <td style="padding:8px 12px;"><span style="color:${inst.is_active ? '#6ee7b7' : '#6b7280'}">${inst.is_active ? '🟢 نشط' : '⚪ غير نشط'}</span></td>
+                <td style="padding:8px 12px;color:#6b7280;font-size:0.75rem;">${lastSeen}</td>
+                <td style="padding:8px 12px;">
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <button onclick="showInstallDetail('${inst.install_id}')" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:4px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;" title="عرض المستخدمين"><i class="fas fa-users"></i> تفاصيل</button>
+                        <button onclick="deleteInstall('${inst.install_id}')" style="background:rgba(239,68,68,0.12);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);padding:4px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;" title="حذف"><i class="fas fa-trash"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+        });
+        h += '</tbody></table>';
+        tbl.innerHTML = h;
+    } catch(e) {
+        tbl.innerHTML = '<div style="padding:24px;color:#fca5a5;text-align:center;">❌ خطأ في الاتصال</div>';
+    }
+}
+
+async function showInstallDetail(installId) {
+    try {
+        const r = await fetch(`/admin/api/installation_details/${installId}`, {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.success) { showToast('❌ ' + d.message); return; }
+        _currentInstall = d.installation;
+        document.getElementById('installDetailId').textContent = installId.slice(0,12) + '...';
+        renderInstallUsers(_currentInstall);
+        document.getElementById('installDetailPanel').style.display = 'block';
+        document.getElementById('installDetailPanel').scrollIntoView({behavior:'smooth'});
+    } catch(e) { showToast('❌ خطأ في جلب التفاصيل'); }
+}
+
+function refreshInstallDetail() {
+    if (_currentInstall) showInstallDetail(_currentInstall.install_id);
+}
+
+function renderInstallUsers(install) {
+    const tbody = document.getElementById('installUsersBody');
+    const users = install.users_state || {};
+    if (!Object.keys(users).length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted);">لا يوجد مستخدمون في هذا التثبيت</td></tr>';
+        return;
+    }
+    let rows = '';
+    for (const [uid, state] of Object.entries(users)) {
+        const connected = state.connected || false;
+        const connectedAt = state.connected_at ? new Date(state.connected_at).toLocaleString('ar-SA') : '—';
+        const lastSeen = state.last_seen ? new Date(state.last_seen).toLocaleString('ar-SA') : '—';
+        const phone = state.phone || '—';
+        const accountName = state.account_name || '—';
+        const isAuth = state.authenticated || false;
+        const isBlocked = state.blocked || false;
+        rows += `<tr style="border-bottom:1px solid rgba(99,102,241,0.07);">
+            <td style="padding:8px 12px;">
+                <strong style="color:#a5b4fc;">${state.name || uid}</strong>
+                ${isAuth ? '<span style="display:block;color:#6ee7b7;font-size:0.7rem;">✅ مسجّل دخول</span>' : ''}
+                ${isBlocked ? '<span style="display:block;color:#fca5a5;font-size:0.7rem;">🔒 محظور</span>' : ''}
+            </td>
+            <td style="padding:8px 12px;color:#94a3b8;font-size:0.78rem;">${phone}</td>
+            <td style="padding:8px 12px;color:#94a3b8;font-size:0.78rem;">${accountName}</td>
+            <td style="padding:8px 12px;"><span style="color:${connected ? '#6ee7b7' : '#6b7280'}">${connected ? '🟢 متصل' : '⚪ غير متصل'}</span></td>
+            <td style="padding:8px 12px;color:#6b7280;font-size:0.75rem;">${connectedAt}</td>
+            <td style="padding:8px 12px;color:#6b7280;font-size:0.75rem;">${lastSeen}</td>
+            <td style="padding:8px 12px;">
+                <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                    <button onclick="toggleInstallUserBlock('${install.install_id}','${uid}',${!isBlocked})" style="background:${isBlocked?'rgba(16,185,129,0.12)':'rgba(239,68,68,0.12)'};color:${isBlocked?'#6ee7b7':'#fca5a5'};border:1px solid ${isBlocked?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'};padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;" title="${isBlocked?'فك الحظر':'حظر'}">${isBlocked?'🔓':'🚫'}</button>
+                    <button onclick="forceLogoutInstallUser('${install.install_id}','${uid}')" style="background:rgba(245,158,11,0.12);color:#fcd34d;border:1px solid rgba(245,158,11,0.3);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;" title="تسجيل خروج إجباري">🚪</button>
+                    <button onclick="viewConnectionHistory('${uid}')" style="background:rgba(99,102,241,0.12);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;" title="سجل الاتصالات">📊</button>
+                    <button onclick="exportInstallUsers('${install.install_id}')" style="background:rgba(16,185,129,0.1);color:#6ee7b7;border:1px solid rgba(16,185,129,0.25);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;" title="تصدير CSV">📥</button>
+                </div>
+            </td>
+        </tr>`;
+    }
+    tbody.innerHTML = rows;
+}
+
+async function toggleInstallUserBlock(installId, userId, blocked) {
+    try {
+        const r = await fetch('/admin/api/toggle_block_user', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({install_id: installId, user_id: userId, blocked})
+        });
+        const d = await r.json();
+        if (d.success) { showToast(`✅ ${blocked ? 'تم حظر' : 'تم فك حظر'} المستخدم ${userId}`); await showInstallDetail(installId); }
+        else showToast('❌ ' + d.message);
+    } catch(e) { showToast('❌ خطأ في الاتصال'); }
+}
+
+async function forceLogoutInstallUser(installId, userId) {
+    if (!confirm(`هل أنت متأكد من تسجيل خروج ${userId} إجبارياً؟`)) return;
+    try {
+        const r = await fetch('/admin/api/force_logout_install_user', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({install_id: installId, user_id: userId})
+        });
+        const d = await r.json();
+        if (d.success) { showToast('✅ ' + d.message); await showInstallDetail(installId); }
+        else showToast('❌ ' + d.message);
+    } catch(e) { showToast('❌ خطأ في الاتصال'); }
+}
+
+async function deleteInstall(installId) {
+    if (!confirm(`هل أنت متأكد من حذف التثبيت ${installId.slice(0,8)}؟`)) return;
+    try {
+        const r = await fetch('/admin/api/delete_install', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({install_id: installId})
+        });
+        const d = await r.json();
+        if (d.success) { showToast('✅ تم حذف التثبيت'); loadInstallations(); }
+        else showToast('❌ ' + d.message);
+    } catch(e) { showToast('❌ خطأ في الاتصال'); }
+}
+
+async function viewConnectionHistory(userId) {
+    try {
+        const r = await fetch(`/admin/api/user_connection_history/${userId}`, {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.success) { showToast('❌ ' + (d.message || 'فشل جلب السجل')); return; }
+        let html = `<div style="font-size:0.85rem;max-height:70vh;overflow-y:auto;">`;
+        if (!d.history || !d.history.length) {
+            html += '<p style="color:var(--muted);text-align:center;padding:20px;">لا توجد سجلات اتصال</p>';
+        } else {
+            d.history.forEach(h => {
+                const connAt = h.connected_at ? new Date(h.connected_at).toLocaleString('ar-SA') : '—';
+                const discAt = h.disconnected_at ? new Date(h.disconnected_at).toLocaleString('ar-SA') : '—';
+                const lastSeen = h.last_seen ? new Date(h.last_seen).toLocaleString('ar-SA') : '—';
+                html += `<div style="border:1px solid var(--border);margin-bottom:10px;padding:12px;border-radius:10px;background:rgba(0,0,0,0.2);">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+                        <div><span style="color:var(--muted);font-size:0.72rem;">جهاز:</span><br><code style="color:#a5b4fc;font-size:0.75rem;">${h.install_id?.slice(0,12)}...</code></div>
+                        <div><span style="color:var(--muted);font-size:0.72rem;">IP:</span><br><span style="color:#94a3b8;font-size:0.75rem;">${h.ip || '—'}</span></div>
+                        <div><span style="color:var(--muted);font-size:0.72rem;">📱 رقم الجوال:</span><br><span style="color:#e2e8f0;font-size:0.8rem;">${h.phone || '—'}</span></div>
+                        <div><span style="color:var(--muted);font-size:0.72rem;">👤 اسم التليجرام:</span><br><span style="color:#e2e8f0;font-size:0.8rem;">${h.account_name || '—'}</span></div>
+                        <div><span style="color:var(--muted);font-size:0.72rem;">⏱️ آخر اتصال:</span><br><span style="color:#6ee7b7;font-size:0.75rem;">${connAt}</span></div>
+                        <div><span style="color:var(--muted);font-size:0.72rem;">⏱️ آخر انقطاع:</span><br><span style="color:#fca5a5;font-size:0.75rem;">${discAt}</span></div>
+                        <div><span style="color:var(--muted);font-size:0.72rem;">👁️ آخر نشاط:</span><br><span style="color:#fbbf24;font-size:0.75rem;">${lastSeen}</span></div>
+                        <div><span style="color:var(--muted);font-size:0.72rem;">الحالة:</span><br><span style="color:${h.connected?'#6ee7b7':'#6b7280'}">${h.connected?'🟢 متصل':'⚪ غير متصل'}</span></div>
+                    </div>
+                    ${h.session_history && h.session_history.length ? `
+                    <details style="margin-top:6px;">
+                        <summary style="cursor:pointer;color:#a5b4fc;font-size:0.78rem;padding:4px 0;">📋 سجل الجلسات (${h.session_history.length})</summary>
+                        <div style="margin-top:6px;padding:6px;background:rgba(0,0,0,0.3);border-radius:6px;">
+                            ${h.session_history.map(s=>`
+                                <div style="font-size:0.72rem;border-bottom:1px dotted rgba(99,102,241,0.2);padding:4px 0;color:#94a3b8;">
+                                    🟢 ${s.connected_at ? new Date(s.connected_at).toLocaleString('ar-SA') : '—'}
+                                    ${s.disconnected_at ? ` &nbsp;→&nbsp; 🔴 ${new Date(s.disconnected_at).toLocaleString('ar-SA')}` : ' &nbsp;→&nbsp; <span style="color:#6ee7b7;">لا يزال متصلاً</span>'}
+                                    ${s.phone ? `<br>📱 ${s.phone}` : ''}
+                                    ${s.account_name ? ` &nbsp;|&nbsp; 👤 ${s.account_name}` : ''}
+                                </div>`).join('')}
+                        </div>
+                    </details>` : ''}
+                </div>`;
+            });
+        }
+        html += '</div>';
+        _showAdminModal(`سجل اتصالات: ${userId}`, html);
+    } catch(e) { showToast('❌ خطأ في الاتصال'); }
+}
+
+function exportInstallUsers(installId) {
+    window.location.href = `/admin/api/export_install_users/${installId}`;
+}
+
+function _showAdminModal(title, bodyHtml) {
+    let modal = document.getElementById('_adminModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = '_adminModal';
+        modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);padding:16px;';
+        modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;max-width:700px;width:100%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.7);">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
+                <h6 id="_adminModalTitle" style="margin:0;color:#e2e8f0;font-weight:700;"></h6>
+                <button onclick="document.getElementById('_adminModal').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px;">✕</button>
+            </div>
+            <div id="_adminModalBody" style="padding:16px 20px;overflow-y:auto;flex:1;"></div>
+        </div>`;
+        document.body.appendChild(modal);
+    }
+    document.getElementById('_adminModalTitle').textContent = title;
+    document.getElementById('_adminModalBody').innerHTML = bodyHtml;
+    modal.style.display = 'flex';
+}
+
+
 window.addEventListener('load', () => {
     fetch('/admin/api/session_check', {credentials:'same-origin'})
         .then(r => r.json())
