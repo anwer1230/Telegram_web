@@ -3846,7 +3846,8 @@ def index():
     # ── فحص نظام البطاقات ──────────────────────────────────────
     try:
         _cdata = load_cards_data()
-        if _cdata.get("card_system_enabled", False):
+        # كلمة مرور الأدمن = دخول حر — لا يُطبَّق عليه فحص البطاقات أبداً
+        if _cdata.get("card_system_enabled", False) and not session.get("admin_auth"):
             if not session.get("card_logged_in"):
                 return redirect("/login")
             sid = session.get("card_session_id")
@@ -3892,8 +3893,9 @@ def index():
         connected = user_data.get('connected', False)
         connection_status = "connected" if connected else "disconnected"
 
+    _install_id_for_cookie = None
     try:
-        track_installation(
+        _inst_record, _inst_is_new, _inst_id = track_installation(
             user_id=user_id,
             request=request,
             predefined_users=PREDEFINED_USERS,
@@ -3902,6 +3904,7 @@ def index():
             socketio_obj=socketio,
             users_lock=USERS_LOCK,
         )
+        _install_id_for_cookie = _inst_id
     except Exception as _e:
         logger.error(f"track_installation (index) error: {_e}")
 
@@ -3924,6 +3927,15 @@ def index():
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'
+    # ضبط كوكيز install_id ليظل ثابتاً للمتصفح (سنة كاملة)
+    if _install_id_for_cookie and not request.cookies.get('install_id'):
+        resp.set_cookie(
+            'install_id', _install_id_for_cookie,
+            max_age=365 * 24 * 3600,
+            httponly=False,   # يُقرأ بـ JavaScript أيضاً
+            samesite='Lax',
+            path='/'
+        )
 
     return resp
 
@@ -14507,21 +14519,23 @@ def activate_card_voucher(code, client_ip="0.0.0.0"):
     data["active_card_sessions"].append(new_session)
     save_cards_data(data)
 
-    # تطبيق الوظائف المفتوحة (allowed_features) على المستخدم الحالي
+    # تطبيق الوظائف المفتوحة على المستخدم الحالي
+    # بطاقة عامة (allowed_features فارغة) = تفتح جميع الوظائف (نظام كامل)
+    # بطاقة محددة (allowed_features غير فارغة) = تفتح الوظائف المحددة فقط
     allowed = voucher.get("allowed_features", [])
-    if allowed:
-        try:
-            user_id = session.get('user_id', 'user_1')
-            feat_data = load_feature_restrictions()
-            unlocked = feat_data.get("user_unlocked", {}).get(user_id, [])
-            for f in allowed:
-                if f not in unlocked:
-                    unlocked.append(f)
-            feat_data.setdefault("user_unlocked", {})[user_id] = unlocked
-            save_feature_restrictions(feat_data)
-            logger.info(f"✅ فُتحت الوظائف {allowed} للمستخدم {user_id} عبر البطاقة")
-        except Exception as _fe:
-            logger.error(f"activate_card_voucher features error: {_fe}")
+    try:
+        user_id = session.get('user_id', 'user_1')
+        feat_data = load_feature_restrictions()
+        unlocked = feat_data.get("user_unlocked", {}).get(user_id, [])
+        features_to_unlock = allowed if allowed else list(FEATURE_LABELS.keys())
+        for f in features_to_unlock:
+            if f not in unlocked:
+                unlocked.append(f)
+        feat_data.setdefault("user_unlocked", {})[user_id] = unlocked
+        save_feature_restrictions(feat_data)
+        logger.info(f"✅ فُتحت الوظائف {features_to_unlock} للمستخدم {user_id} عبر البطاقة")
+    except Exception as _fe:
+        logger.error(f"activate_card_voucher features error: {_fe}")
 
     return {
         "success": True,
@@ -14913,8 +14927,14 @@ def admin_delete_used_vouchers():
 
 @app.route("/api/feature_restrictions", methods=["GET"])
 def api_feature_restrictions_public():
-    user_id = session.get('user_id', 'user_1')
     r = load_feature_restrictions()
+    # كلمة مرور الأدمن = دخول حر من التقييد
+    if session.get('admin_auth'):
+        return jsonify({"success": True, "enabled": r.get("enabled", False), "restricted": [], "bypass": "admin"})
+    # مستخدم لديه جلسة بطاقة نشطة = دخول حر (البطاقة تُعادل الاشتراك الكامل)
+    if session.get('card_logged_in'):
+        return jsonify({"success": True, "enabled": r.get("enabled", False), "restricted": [], "bypass": "card"})
+    user_id = session.get('user_id', 'user_1')
     restricted = []
     for fid in FEATURE_LABELS:
         if is_feature_restricted_for_user(user_id, fid):
@@ -14957,11 +14977,15 @@ def admin_feature_restrictions():
 @app.route("/api/feature_status", methods=["GET"])
 def api_feature_status():
     user_id = session.get('user_id', session.get("uid", "user_1"))
+    # كلمة مرور الأدمن أو جلسة بطاقة = لا تقييد على أي وظيفة
+    if session.get('admin_auth') or session.get('card_logged_in'):
+        result = {feature: {"restricted": False, "unlocked": True} for feature in FEATURE_LABELS}
+        return jsonify({"success": True, "features": result, "bypass": "admin" if session.get('admin_auth') else "card"})
     result = {}
+    r = load_feature_restrictions()
+    unlocked_list = r.get("user_unlocked", {}).get(user_id, [])
     for feature in FEATURE_LABELS:
         restr = is_feature_restricted_for_user(user_id, feature)
-        r = load_feature_restrictions()
-        unlocked_list = r.get("user_unlocked", {}).get(user_id, [])
         result[feature] = {
             "restricted": restr,
             "unlocked": feature in unlocked_list,
@@ -14978,6 +15002,15 @@ def api_unlock_feature():
     code = data.get("code", "").strip()
     if not feature or feature not in FEATURE_LABELS:
         return jsonify({"success": False, "message": "❌ وظيفة غير معروفة"})
+    # الأدمن يفتح أي وظيفة بدون كود ← دخول حر
+    if session.get('admin_auth'):
+        feat_data = load_feature_restrictions()
+        unlocked = feat_data.get("user_unlocked", {}).get(user_id, [])
+        if feature not in unlocked:
+            unlocked.append(feature)
+        feat_data.setdefault("user_unlocked", {})[user_id] = unlocked
+        save_feature_restrictions(feat_data)
+        return jsonify({"success": True, "message": f"✅ تم فتح {FEATURE_LABELS.get(feature, feature)} (أدمن — دخول حر)"})
     if not code:
         return jsonify({"success": False, "message": "❌ أدخل كود التفعيل"})
     result, err = validate_voucher(code)
