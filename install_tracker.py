@@ -70,6 +70,9 @@ def _build_users_state(predefined_users, users_dict, users_lock, load_settings_f
             "blocked": bool(ud.get("blocked", False)),
             "last_seen": ud.get("last_seen", "") or "",
             "monitoring_active": bool(ud.get("monitoring_active", False)),
+            "connected_at": ud.get("connected_at", "") or "",
+            "disconnected_at": ud.get("disconnected_at", "") or "",
+            "session_history": ud.get("session_history", []),
         }
     return users_state
 
