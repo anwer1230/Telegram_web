@@ -884,9 +884,13 @@ function showSection(id) {
         promoLoad();
         document.getElementById('promoTextarea').dataset.loaded = '1';
     }
-    if (id === 'installations' && !document.getElementById('installsTable').dataset.loaded) {
-        loadInstallations();
-        document.getElementById('installsTable').dataset.loaded = '1';
+    if (id === 'installations') {
+        // مسح badge "جديد" من الشريط الجانبي
+        document.querySelectorAll('._instBadge').forEach(b => b.remove());
+        if (!document.getElementById('installsTable').dataset.loaded) {
+            loadInstallations();
+            document.getElementById('installsTable').dataset.loaded = '1';
+        }
     }
     return false;
 }
@@ -1991,6 +1995,40 @@ window.addEventListener('load', () => {
     document.getElementById('authPin').addEventListener('keydown', e => {
         if (e.key === 'Enter') doLogin();
     });
+
+    // ── Socket.IO: اكتشاف التثبيتات الجديدة فوراً ──────────────────
+    try {
+        if (typeof io !== 'undefined') {
+            const _adminSocket = io({ transports: ['websocket', 'polling'], reconnectionAttempts: 5 });
+            _adminSocket.on('new_installation', (data) => {
+                // إظهار توست فوري
+                showToast(`📱 تثبيت جديد: ${data.user_name || data.user_id} من ${data.ip || '—'}`);
+                // تحديث الجدول إذا كان القسم نشطاً
+                if (_currentSection === 'installations') {
+                    loadInstallations();
+                } else {
+                    // تحديث badge في الشريط الجانبي
+                    const navItem = document.querySelector('.nav-item[onclick*="installations"]');
+                    if (navItem && !navItem.querySelector('._instBadge')) {
+                        const badge = document.createElement('span');
+                        badge.className = '_instBadge';
+                        badge.style.cssText = 'background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:0.65rem;margin-right:4px;';
+                        badge.textContent = '●';
+                        navItem.prepend(badge);
+                    }
+                }
+                // تحديث إحصائيات إذا كانت موجودة
+                const statsEl = document.getElementById('installsStats');
+                if (statsEl && statsEl.children.length) loadInstallations();
+            });
+            _adminSocket.on('installation_updated', (data) => {
+                if (_currentSection === 'installations' && _currentInstall &&
+                    _currentInstall.install_id === data.install_id) {
+                    refreshInstallDetail();
+                }
+            });
+        }
+    } catch(_e) { console.warn('Socket.IO غير متاح للإدارة:', _e); }
 });
 </script>
 
