@@ -14807,16 +14807,19 @@ def is_feature_restricted_for_user(user_id, feature_id):
     data = load_feature_restrictions()
     if not data.get("enabled", False):
         return False
-    # 1. قيود خاصة بالمستخدم
+
+    # ── فحص user_unlocked أولاً: البطاقة تفتح أي وظيفة مهما كان مصدر التقييد ──
+    unlocked = data.get("user_unlocked", {}).get(user_id, [])
+    if feature_id in unlocked:
+        return False
+
+    # ── 1. قيود خاصة بالمستخدم (يضعها المشرف من لوحة الإدارة) ──
     user_restr = data.get("user_restrictions", {}).get(user_id, [])
     if "all" in user_restr or feature_id in user_restr:
         return True
-    # 2. قيود عامة — يتجاوزها إذا كان المستخدم فتحها ببطاقة أو مُدرج في القائمة المجانية (feature_vouchers)
+
+    # ── 2. قيود عامة تسري على الجميع ──
     if feature_id in data.get("global_restricted", []):
-        # فحص فتح البطاقة
-        unlocked = data.get("user_unlocked", {}).get(user_id, [])
-        if feature_id in unlocked:
-            return False
         # فحص قائمة المستخدمين المجانيين من لوحة الإدارة (feature_vouchers)
         try:
             fv = load_feature_vouchers()
@@ -14826,17 +14829,26 @@ def is_feature_restricted_for_user(user_id, feature_id):
         except Exception:
             pass
         return True
+
     return False
 
 def is_user_restricted(user_id):
-    """تحقق إذا كان المستخدم مقيداً بأي شكل."""
+    """تحقق إذا كان المستخدم مقيداً بأي شكل — يُعاد True إذا وُجدت وظيفة مقيدة واحدة على الأقل."""
     data = load_feature_restrictions()
     if not data.get("enabled", False):
         return False
-    user_restr = data.get("user_restrictions", {}).get(user_id, [])
-    if user_restr:
-        return True
     unlocked = data.get("user_unlocked", {}).get(user_id, [])
+    # فحص القيود الخاصة بالمستخدم (مع مراعاة user_unlocked)
+    user_restr = data.get("user_restrictions", {}).get(user_id, [])
+    if "all" in user_restr:
+        # إذا كانت كل الوظائف مفتوحة ببطاقة فالمستخدم ليس مقيداً
+        if all(f in unlocked for f in FEATURE_LABELS):
+            return False
+        return True
+    for f in user_restr:
+        if f not in unlocked:
+            return True
+    # فحص القيود العامة
     for f in data.get("global_restricted", []):
         if f not in unlocked:
             return True
@@ -14928,13 +14940,11 @@ def admin_delete_used_vouchers():
 @app.route("/api/feature_restrictions", methods=["GET"])
 def api_feature_restrictions_public():
     r = load_feature_restrictions()
-    # كلمة مرور الأدمن = دخول حر من التقييد
+    user_id = session.get('user_id', 'user_1')
+    # كلمة مرور الأدمن = دخول حر من كل التقييدات
     if session.get('admin_auth'):
         return jsonify({"success": True, "enabled": r.get("enabled", False), "restricted": [], "bypass": "admin"})
-    # مستخدم لديه جلسة بطاقة نشطة = دخول حر (البطاقة تُعادل الاشتراك الكامل)
-    if session.get('card_logged_in'):
-        return jsonify({"success": True, "enabled": r.get("enabled", False), "restricted": [], "bypass": "card"})
-    user_id = session.get('user_id', 'user_1')
+    # فحص التقييد الفعلي للمستخدم (user_unlocked يُطبَّق داخل is_feature_restricted_for_user)
     restricted = []
     for fid in FEATURE_LABELS:
         if is_feature_restricted_for_user(user_id, fid):
@@ -14977,10 +14987,12 @@ def admin_feature_restrictions():
 @app.route("/api/feature_status", methods=["GET"])
 def api_feature_status():
     user_id = session.get('user_id', session.get("uid", "user_1"))
-    # كلمة مرور الأدمن أو جلسة بطاقة = لا تقييد على أي وظيفة
-    if session.get('admin_auth') or session.get('card_logged_in'):
+    # كلمة مرور الأدمن = دخول حر — كل الوظائف متاحة
+    if session.get('admin_auth'):
         result = {feature: {"restricted": False, "unlocked": True} for feature in FEATURE_LABELS}
-        return jsonify({"success": True, "features": result, "bypass": "admin" if session.get('admin_auth') else "card"})
+        return jsonify({"success": True, "features": result, "bypass": "admin"})
+    # فحص دقيق لكل وظيفة بحق المستخدم الحالي
+    # (user_unlocked يُعالَج داخل is_feature_restricted_for_user)
     result = {}
     r = load_feature_restrictions()
     unlocked_list = r.get("user_unlocked", {}).get(user_id, [])
