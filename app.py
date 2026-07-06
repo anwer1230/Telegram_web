@@ -4822,66 +4822,6 @@ def api_stop_monitoring():
         "message": "❌ النظام غير مشغل"
     })
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  API: الفحص الاستباقي للمجموعات قبل الإرسال
-# ══════════════════════════════════════════════════════════════════════════════
-@app.route("/api/pre_send_scan", methods=["POST"])
-def api_pre_send_scan():
-    """
-    يفحص قائمة المجموعات المطلوبة ويرجع تقريراً مفصلاً:
-      - protected: bool
-      - bots: list
-      - reason: str
-    لكل مجموعة، ثم يحسب الإحصائيات الإجمالية.
-    """
-    if 'user_id' not in session:
-        return jsonify({"success": False, "message": "❌ الجلسة غير صالحة"}), 401
-
-    user_id = session['user_id']
-    with USERS_LOCK:
-        user_data = USERS.get(user_id, {})
-        client_manager = user_data.get('client_manager')
-
-    if not client_manager or not client_manager.client:
-        return jsonify({"success": False, "message": "❌ العميل غير متصل"}), 400
-
-    data = request.get_json() or {}
-    groups_raw = data.get('groups', [])
-    if isinstance(groups_raw, str):
-        groups_raw = [g.strip() for g in groups_raw.replace('\n', ',').split(',') if g.strip()]
-    groups_raw = [g for g in groups_raw if g]
-
-    if not groups_raw:
-        return jsonify({"success": False, "message": "❌ لا توجد مجموعات للفحص"}), 400
-
-    results = []
-    for group in groups_raw:
-        try:
-            entity_obj = telegram_manager._resolve_entity(client_manager, group)
-            info = telegram_manager._check_group_protection_detailed(
-                user_id, client_manager, entity_obj, group
-            )
-        except Exception as e:
-            info = {
-                "entity_label": group,
-                "protected": False,
-                "bots": [],
-                "reason": f"خطأ في حل الكيان: {str(e)[:80]}",
-                "error": True
-            }
-        results.append(info)
-
-    protected_count = sum(1 for r in results if r.get('protected'))
-    total = len(results)
-
-    return jsonify({
-        "success": True,
-        "results": results,
-        "protected_count": protected_count,
-        "safe_count": total - protected_count,
-        "total": total,
-        "all_clear": protected_count == 0
-    })
 
 
 @app.route("/api/send_now", methods=["POST"])
@@ -15456,6 +15396,147 @@ h2{{color:#1e3c78;}} .meta{{color:#666;font-size:11px;}}
     response = make_response(html_content)
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     return response
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  API: تتبع اتصال وانقطاع المستخدمين مع تسجيل رقم الجوال واسم التليجرام
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/user_connected", methods=["POST"])
+def api_user_connected():
+    """تسجيل اتصال المستخدم مع رقمه واسمه في التليجرام"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "❌ الجلسة غير صالحة"}), 401
+    from install_tracker import load_user_sessions, save_user_sessions
+    data = request.get_json() or {}
+    # يجب أن يطابق user_id في الجلسة
+    session_user_id = session['user_id']
+    user_id = data.get("user_id", session_user_id)
+    if user_id != session_user_id:
+        return jsonify({"success": False, "message": "❌ غير مسموح"}), 403
+    install_id = request.headers.get("X-Install-ID", "unknown")
+    phone = data.get("phone", "")
+    account_name = data.get("account_name", "")
+    name = data.get("name", user_id)
+    if user_id == "unknown":
+        return jsonify({"success": False, "message": "user_id مطلوب"}), 400
+    now_iso = datetime.now().isoformat()
+    try:
+        sessions_data = load_user_sessions()
+        inst = next((i for i in sessions_data.get("installations", []) if i.get("install_id") == install_id), None)
+        if inst:
+            state = inst.setdefault("users_state", {}).setdefault(user_id, {})
+            old_connected = state.get("connected", False)
+            state["connected"] = True
+            state["last_seen"] = now_iso
+            state["phone"] = phone or state.get("phone", "")
+            state["account_name"] = account_name or state.get("account_name", "")
+            state["name"] = name
+            if not old_connected:
+                state["connected_at"] = now_iso
+                history = state.get("session_history", [])
+                history.append({
+                    "connected_at": now_iso,
+                    "disconnected_at": None,
+                    "phone": state["phone"],
+                    "account_name": state["account_name"]
+                })
+                if len(history) > 20:
+                    history = history[-20:]
+                state["session_history"] = history
+            save_user_sessions(sessions_data)
+        if user_id in USERS:
+            with USERS_LOCK:
+                USERS[user_id]["connected"] = True
+                USERS[user_id]["last_seen"] = now_iso
+                USERS[user_id]["connected_at"] = now_iso
+                if phone:
+                    USERS[user_id]["phone"] = phone
+                if account_name:
+                    USERS[user_id]["account_name"] = account_name
+        socketio.emit("installation_updated", {
+            "install_id": install_id,
+            "user_id": user_id,
+            "connected": True,
+            "connected_at": now_iso,
+            "phone": phone,
+            "account_name": account_name
+        })
+    except Exception as e:
+        logger.error(f"api_user_connected error: {e}")
+    return jsonify({"success": True, "message": f"تم تسجيل اتصال {user_id}", "connected_at": now_iso})
+
+
+@app.route("/api/user_disconnected", methods=["POST"])
+def api_user_disconnected():
+    """تسجيل انقطاع المستخدم"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "❌ الجلسة غير صالحة"}), 401
+    from install_tracker import load_user_sessions, save_user_sessions
+    data = request.get_json() or {}
+    session_user_id = session['user_id']
+    user_id = data.get("user_id", session_user_id)
+    if user_id != session_user_id:
+        return jsonify({"success": False, "message": "❌ غير مسموح"}), 403
+    install_id = request.headers.get("X-Install-ID", "unknown")
+    if user_id == "unknown":
+        return jsonify({"success": False, "message": "user_id مطلوب"}), 400
+    now_iso = datetime.now().isoformat()
+    try:
+        sessions_data = load_user_sessions()
+        inst = next((i for i in sessions_data.get("installations", []) if i.get("install_id") == install_id), None)
+        if inst:
+            state = inst.setdefault("users_state", {}).setdefault(user_id, {})
+            old_connected = state.get("connected", False)
+            state["connected"] = False
+            state["last_seen"] = now_iso
+            state["disconnected_at"] = now_iso
+            if old_connected:
+                history = state.get("session_history", [])
+                if history and history[-1].get("disconnected_at") is None:
+                    history[-1]["disconnected_at"] = now_iso
+                state["session_history"] = history
+            save_user_sessions(sessions_data)
+        if user_id in USERS:
+            with USERS_LOCK:
+                USERS[user_id]["connected"] = False
+                USERS[user_id]["last_seen"] = now_iso
+                USERS[user_id]["disconnected_at"] = now_iso
+        socketio.emit("installation_updated", {
+            "install_id": install_id,
+            "user_id": user_id,
+            "connected": False,
+            "disconnected_at": now_iso
+        })
+    except Exception as e:
+        logger.error(f"api_user_disconnected error: {e}")
+    return jsonify({"success": True, "message": f"تم تسجيل انقطاع {user_id}", "disconnected_at": now_iso})
+
+
+@app.route("/admin/api/user_connection_history/<user_id>", methods=["GET"])
+def admin_user_connection_history(user_id):
+    """عرض سجل اتصالات مستخدم عبر جميع التثبيتات"""
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    from install_tracker import load_user_sessions
+    sessions_data = load_user_sessions()
+    history = []
+    for inst in sessions_data.get("installations", []):
+        state = inst.get("users_state", {}).get(user_id, {})
+        if state:
+            history.append({
+                "install_id": inst.get("install_id", ""),
+                "ip": inst.get("ip", ""),
+                "user_agent": inst.get("user_agent", "")[:80],
+                "connected": state.get("connected", False),
+                "connected_at": state.get("connected_at", ""),
+                "disconnected_at": state.get("disconnected_at", ""),
+                "last_seen": state.get("last_seen", ""),
+                "phone": state.get("phone", ""),
+                "account_name": state.get("account_name", ""),
+                "session_history": state.get("session_history", [])
+            })
+    return jsonify({"success": True, "history": history, "user_id": user_id})
+
 
 # ─── تشغيل خلفية الإشعارات الدورية إذا كانت مفعّلة ──────────────────
 _promo_init = load_promo_data()
