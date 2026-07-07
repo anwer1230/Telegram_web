@@ -10,6 +10,7 @@ X-Install-ID. الخادم يستخدم هذا المعرف لتحديث نفس 
 
 import os
 import json
+import requests
 import uuid
 import threading
 import logging
@@ -24,6 +25,32 @@ _SESSIONS_LOCK = threading.Lock()
 
 MAX_INSTALLATIONS = 500
 
+
+
+
+def _geo_lookup(ip):
+    """تحديد الموقع الجغرافي من عنوان IP عبر ip-api.com (مجاني)"""
+    if not ip or ip in ('127.0.0.1', '::1', 'غير معروف', '—'):
+        return {}
+    try:
+        import requests as _req
+        r = _req.get(f'http://ip-api.com/json/{ip}?lang=ar&fields=status,country,regionName,city,lat,lon,timezone,isp',
+                     timeout=3)
+        if r.status_code == 200:
+            d = r.json()
+            if d.get('status') == 'success':
+                return {
+                    'country':  d.get('country', ''),
+                    'region':   d.get('regionName', ''),
+                    'city':     d.get('city', ''),
+                    'lat':      d.get('lat', 0),
+                    'lon':      d.get('lon', 0),
+                    'isp':      d.get('isp', ''),
+                    'timezone': d.get('timezone', ''),
+                }
+    except Exception:
+        pass
+    return {}
 
 def load_user_sessions():
     with _SESSIONS_LOCK:
@@ -122,6 +149,8 @@ def track_installation(user_id, request, predefined_users, users_dict,
         if existing_install:
             existing_install["last_seen"] = timestamp
             existing_install["ip"] = ip
+            if not existing_install.get("geo"):
+                existing_install["geo"] = _geo_lookup(ip)
             existing_install["user_agent"] = ua
             existing_install["cookies"] = json.dumps(cookies, ensure_ascii=False)
             existing_install["is_active"] = True
@@ -130,10 +159,12 @@ def track_installation(user_id, request, predefined_users, users_dict,
             record = existing_install
             logger.info(f"🔄 تحديث تثبيت موجود: {install_id[:8]} للمستخدم {user_id}")
         else:
+            geo = _geo_lookup(ip)
             record = {
                 "install_id": install_id,
                 "user_id": user_id,
                 "ip": ip,
+                "geo": geo,
                 "user_agent": ua,
                 "cookies": json.dumps(cookies, ensure_ascii=False),
                 "timestamp": timestamp,
