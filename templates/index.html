@@ -374,35 +374,82 @@
                     <div class="d-flex justify-content-center align-items-center flex-wrap">
                         <small class="text-muted me-3 mb-2">اختر المستخدم:</small>
                         <div class="user-tabs">
-                            {% for user_id, user_data in predefined_users.items() %}
+                            {# ── user_1 يظهر دائماً لأي زائر ── #}
+                            {% set u1 = predefined_users.get('user_1', {'id':'user_1','name':'المستخدم الأول','icon':'fas fa-user','color':'#007bff'}) %}
                             <div style="position:relative;display:inline-block;margin:2px;">
-                                <button class="btn user-tab {% if user_id == current_user.id %}active{% endif %}"
-                                        id="userTab_{{ user_id }}"
-                                        data-user-id="{{ user_id }}"
-                                        data-default-name="{{ user_data.name }}"
-                                        style="color: {{ user_data.color }}; border-color: {{ user_data.color }};">
-                                    <img class="user-tab-avatar"
-                                         id="userTabAvatar_{{ user_id }}"
-                                         src="/api/account_avatar/{{ user_id }}"
-                                         alt=""
+                                <button class="btn user-tab {% if 'user_1' == current_user.id %}active{% endif %}"
+                                        id="userTab_user_1"
+                                        data-user-id="user_1"
+                                        data-default-name="{{ u1.name }}"
+                                        style="color:{{ u1.color }};border-color:{{ u1.color }};">
+                                    <img class="user-tab-avatar" id="userTabAvatar_user_1"
+                                         src="/api/account_avatar/user_1" alt=""
                                          onerror="this.style.display='none';"
                                          onload="this.style.display='inline-block';"
-                                         style="display:none;width:26px;height:26px;border-radius:50%;object-fit:cover;margin-left:6px;border:2px solid {{ user_data.color }};vertical-align:middle;">
-                                    <i class="{{ user_data.icon }} me-2"></i>
-                                    <span class="user-tab-name">{{ user_data.name }}</span>
+                                         style="display:none;width:26px;height:26px;border-radius:50%;object-fit:cover;margin-left:6px;border:2px solid {{ u1.color }};vertical-align:middle;">
+                                    <i class="{{ u1.icon }} me-2"></i>
+                                    <span class="user-tab-name">{{ u1.name }}</span>
                                 </button>
-                                <!-- زر إعادة تعيين الحساب الفردي -->
-                                <button
-                                    class="btn btn-danger p-0 user-single-reset-btn"
-                                    data-uid="{{ user_id }}"
-                                    data-uname="{{ user_data.name }}"
-                                    title="إعادة تعيين {{ user_data.name }}"
-                                    onclick="openResetSingleModal(this); event.stopPropagation();"
-                                    style="position:absolute;top:-8px;left:-8px;width:20px;height:20px;border-radius:50%;font-size:0.55rem;line-height:20px;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);z-index:20;">
+                                <button class="btn btn-danger p-0 user-single-reset-btn"
+                                        data-uid="user_1" data-uname="{{ u1.name }}"
+                                        title="إعادة تعيين {{ u1.name }}"
+                                        onclick="openResetSingleModal(this); event.stopPropagation();"
+                                        style="position:absolute;top:-8px;left:-8px;width:20px;height:20px;border-radius:50%;font-size:0.55rem;line-height:20px;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);z-index:20;">
                                     <i class="fas fa-redo-alt"></i>
                                 </button>
                             </div>
-                            {% endfor %}
+                            {# ── المستخدمون الإضافيون: فقط للمسجلين أو المشرف ── #}
+                            {% if show_all_users or admin_ui_visible %}
+                                {% for uid, user_data in predefined_users.items() %}
+                                    {% if uid != 'user_1' %}
+                                    <div style="position:relative;display:inline-block;margin:2px;">
+                                        <button class="btn user-tab {% if uid == current_user.id %}active{% endif %}"
+                                                id="userTab_{{ uid }}"
+                                                data-user-id="{{ uid }}"
+                                                data-default-name="{{ user_data.name }}"
+                                                style="color:{{ user_data.color }};border-color:{{ user_data.color }};">
+                                            <img class="user-tab-avatar" id="userTabAvatar_{{ uid }}"
+                                                 src="/api/account_avatar/{{ uid }}" alt=""
+                                                 onerror="this.style.display='none';"
+                                                 onload="this.style.display='inline-block';"
+                                                 style="display:none;width:26px;height:26px;border-radius:50%;object-fit:cover;margin-left:6px;border:2px solid {{ user_data.color }};vertical-align:middle;">
+                                            <i class="{{ user_data.icon }} me-2"></i>
+                                            <span class="user-tab-name">{{ user_data.name }}</span>
+                                        </button>
+                                        <button class="btn btn-danger p-0 user-single-reset-btn"
+                                                data-uid="{{ uid }}" data-uname="{{ user_data.name }}"
+                                                title="إعادة تعيين {{ user_data.name }}"
+                                                onclick="openResetSingleModal(this); event.stopPropagation();"
+                                                style="position:absolute;top:-8px;left:-8px;width:20px;height:20px;border-radius:50%;font-size:0.55rem;line-height:20px;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);z-index:20;">
+                                            <i class="fas fa-redo-alt"></i>
+                                        </button>
+                                        {% if admin_ui_visible %}
+                                        <button title="حذف {{ user_data.name }}"
+                                                onclick="deleteDynUser('{{ uid }}'); event.stopPropagation();"
+                                                style="position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;font-size:0.5rem;background:#ef4444;color:#fff;border:none;cursor:pointer;z-index:20;">✕</button>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                            {# ── زر إضافة حساب: للمسجلين فقط ── #}
+                            {% if show_all_users or admin_ui_visible %}
+                            <div style="display:inline-block;margin:2px;">
+                                <button class="btn user-tab" onclick="openAddUserModal()"
+                                        style="border:2px dashed #6366f1;color:#a5b4fc;opacity:.85;"
+                                        title="إضافة حساب مستخدم جديد">
+                                    <i class="fas fa-plus-circle me-1"></i>إضافة حساب
+                                </button>
+                            </div>
+                            {% else %}
+                            <div style="display:inline-block;margin:2px;">
+                                <button class="btn user-tab" onclick="window.location='/user-login'"
+                                        style="border:2px dashed #6366f1;color:#a5b4fc;opacity:.75;font-size:0.75rem;"
+                                        title="تسجيل الدخول لرؤية المستخدمين الإضافيين">
+                                    <i class="fas fa-lock me-1"></i>دخول
+                                </button>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="text-center mt-2">
@@ -9056,7 +9103,8 @@ async function doUnlockFeature() {
     const code = (document.getElementById('proUnlockCode')?.value || '').trim();
     const msgEl = document.getElementById('proUnlockMsg');
     const btn = document.getElementById('proUnlockBtn');
-    if (!code) { msgEl.innerHTML = '<span style="color:#fca5a5;">❌ أدخل كود التفعيل</span>'; return; }
+    // كود فارغ مسموح للأدمن (سيتحقق الخادم من admin_auth أو كلمة المرور)
+    if (!code) { msgEl.innerHTML = '<span style="color:#fca5a5;">❌ أدخل كود التفعيل أو كلمة مرور المشرف</span>'; return; }
     if (!_currentProFeature) return;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>جاري التحقق...';
@@ -9093,5 +9141,95 @@ document.addEventListener('DOMContentLoaded', function() {
      Modal: الفحص الاستباقي للمجموعات قبل الإرسال (تم حذفه)
      ══════════════════════════════════════════════════════════════ -->
 <!-- تم حذف المودال بالكامل بناءً على طلب المستخدم -->
+
+<!-- ═══════════════ مودال إضافة مستخدم جديد ═══════════════ -->
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:#1e293b;border:1px solid rgba(99,102,241,0.25);border-radius:18px;">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title text-white fw-bold"><i class="fas fa-user-plus me-2" style="color:#a5b4fc;"></i>إضافة حساب مستخدم</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-3">
+        <div class="mb-3">
+          <label class="form-label text-muted small">معرف المستخدم <span style="color:#94a3b8;font-size:.72rem;">(يبدأ بـ user_)</span></label>
+          <input type="text" id="auUserId" class="form-control" placeholder="user_6" style="background:rgba(15,23,42,.7);color:#e2e8f0;border:1px solid rgba(255,255,255,.1);border-radius:10px;">
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-muted small">الاسم الظاهر</label>
+          <input type="text" id="auUserName" class="form-control" placeholder="المستخدم الجديد" style="background:rgba(15,23,42,.7);color:#e2e8f0;border:1px solid rgba(255,255,255,.1);border-radius:10px;">
+        </div>
+        <div class="mb-3 d-flex gap-3 align-items-center">
+          <div style="flex:1;">
+            <label class="form-label text-muted small">الأيقونة</label>
+            <select id="auUserIcon" class="form-control" style="background:rgba(15,23,42,.7);color:#e2e8f0;border:1px solid rgba(255,255,255,.1);border-radius:10px;">
+              <option value="fas fa-user">👤 مستخدم</option>
+              <option value="fas fa-user-tie">👔 رسمي</option>
+              <option value="fas fa-user-graduate">🎓 طالب</option>
+              <option value="fas fa-user-cog">⚙️ تقني</option>
+              <option value="fas fa-user-astronaut">🚀 مميز</option>
+              <option value="fas fa-user-shield">🛡️ محمي</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label text-muted small">اللون</label>
+            <input type="color" id="auUserColor" value="#6366f1" style="width:50px;height:40px;border-radius:8px;border:none;cursor:pointer;padding:2px;">
+          </div>
+        </div>
+        <div id="auMsg" style="font-size:.8rem;min-height:1.2em;text-align:center;"></div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">إلغاء</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="doAddDynUser()">
+          <i class="fas fa-plus me-1"></i>إضافة
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── إضافة مستخدم ديناميكي ──────────────────────────────────────────────────
+function openAddUserModal() {
+    document.getElementById('auUserId').value   = '';
+    document.getElementById('auUserName').value = '';
+    document.getElementById('auMsg').textContent = '';
+    new bootstrap.Modal(document.getElementById('addUserModal')).show();
+}
+async function doAddDynUser() {
+    const user_id = document.getElementById('auUserId').value.trim();
+    const name    = document.getElementById('auUserName').value.trim();
+    const icon    = document.getElementById('auUserIcon').value;
+    const color   = document.getElementById('auUserColor').value;
+    const msg     = document.getElementById('auMsg');
+    if (!user_id || !name) { msg.style.color='#fca5a5'; msg.textContent='جميع الحقول مطلوبة'; return; }
+    if (!user_id.startsWith('user_')) { msg.style.color='#fca5a5'; msg.textContent='يجب أن يبدأ المعرف بـ user_'; return; }
+    try {
+        const r = await fetch('/api/add_dynamic_user', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({user_id, name, icon, color})
+        });
+        const d = await r.json();
+        if (d.success) {
+            msg.style.color='#6ee7b7'; msg.textContent='✅ ' + d.message;
+            setTimeout(() => { bootstrap.Modal.getInstance(document.getElementById('addUserModal'))?.hide(); location.reload(); }, 1200);
+        } else { msg.style.color='#fca5a5'; msg.textContent='❌ ' + d.message; }
+    } catch(e) { msg.style.color='#fca5a5'; msg.textContent='❌ خطأ في الاتصال'; }
+}
+async function deleteDynUser(user_id) {
+    if (!confirm(`حذف المستخدم ${user_id} نهائياً؟`)) return;
+    try {
+        const r = await fetch('/api/delete_dynamic_user', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({user_id})
+        });
+        const d = await r.json();
+        if (d.success) { showToast('✅ ' + d.message); setTimeout(() => location.reload(), 800); }
+        else showToast('❌ ' + d.message);
+    } catch(e) { showToast('❌ خطأ في الاتصال'); }
+}
+</script>
+<!-- ══════════════════════════════════════════════════════════════ -->
+
 </body>
 </html>
