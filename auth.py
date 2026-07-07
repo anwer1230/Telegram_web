@@ -367,3 +367,224 @@ class TelegramLogin:
             return {"success": True, "message": "✅ تم تسجيل الخروج بنجاح"}
         except Exception as e:
             return {"success": False, "message": f"❌ خطأ في تسجيل الخروج: {str(e)}"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  نظام المستخدمين الديناميكي + حسابات تسجيل الدخول  (يُضاف في نهاية auth.py)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import hashlib as _hashlib
+import base64 as _base64
+import json as _json
+
+try:
+    import requests as _requests
+    _REQUESTS_OK = True
+except ImportError:
+    _REQUESTS_OK = False
+
+# ── مسار مجلد البيانات ──────────────────────────────────────
+_DYN_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+os.makedirs(_DYN_DATA_DIR, exist_ok=True)
+_DYNAMIC_USERS_FILE  = os.path.join(_DYN_DATA_DIR, "dyn_users.json")
+_USER_ACCOUNTS_FILE  = os.path.join(_DYN_DATA_DIR, "user_accounts.json")
+
+# ── دوال GitHub ──────────────────────────────────────────────
+
+def _dyn_gh_headers(token):
+    return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+
+def _dyn_upload_github(file_path, content_bytes, token, repo, branch, message="تحديث"):
+    if not token or not _REQUESTS_OK:
+        return False
+    url  = f"https://api.github.com/repos/{repo}/contents/{file_path}"
+    hdrs = _dyn_gh_headers(token)
+    sha  = None
+    try:
+        r = _requests.get(url, headers=hdrs, timeout=10)
+        if r.status_code == 200:
+            sha = r.json().get("sha")
+    except Exception:
+        pass
+    body = {"message": message, "content": _base64.b64encode(content_bytes).decode(), "branch": branch}
+    if sha:
+        body["sha"] = sha
+    try:
+        r = _requests.put(url, headers=hdrs, json=body, timeout=20)
+        return r.status_code in (200, 201)
+    except Exception:
+        return False
+
+def _dyn_download_github(file_path, token, repo, branch):
+    if not token or not _REQUESTS_OK:
+        return None
+    url  = f"https://api.github.com/repos/{repo}/contents/{file_path}?ref={branch}"
+    hdrs = _dyn_gh_headers(token)
+    try:
+        r = _requests.get(url, headers=hdrs, timeout=10)
+        if r.status_code == 200:
+            b64 = r.json().get("content", "").replace("\n", "")
+            if b64:
+                return _base64.b64decode(b64)
+    except Exception:
+        pass
+    return None
+
+def _dyn_github_params():
+    token  = os.environ.get("GITHUB_TOKEN", "")
+    repo   = os.environ.get("GITHUB_REPO", "anwer1230/Web-browser")
+    branch = os.environ.get("GITHUB_BRANCH", "main")
+    return token, repo, branch
+
+# ── المستخدمون الثابتون الافتراضيون ──────────────────────────
+
+_DEFAULT_PREDEFINED_USERS = {
+    "user_1": {"id": "user_1", "name": "المستخدم الأول",    "icon": "fas fa-user",           "color": "#007bff"},
+    "user_2": {"id": "user_2", "name": "المستخدم الثاني",   "icon": "fas fa-user-tie",        "color": "#28a745"},
+    "user_3": {"id": "user_3", "name": "المستخدم الثالث",   "icon": "fas fa-user-graduate",   "color": "#ffc107"},
+    "user_4": {"id": "user_4", "name": "المستخدم الرابع",   "icon": "fas fa-user-cog",        "color": "#dc3545"},
+    "user_5": {"id": "user_5", "name": "المستخدم الخامس",   "icon": "fas fa-user-astronaut",  "color": "#6f42c1"},
+}
+
+_DYN_USERS_LOCK = __import__('threading').Lock()
+
+def load_dynamic_users():
+    """تحميل قائمة المستخدمين من GitHub أو الملف المحلي أو الافتراضي"""
+    with _DYN_USERS_LOCK:
+        token, repo, branch = _dyn_github_params()
+        content = _dyn_download_github("data/dyn_users.json", token, repo, branch)
+        if content:
+            try:
+                data = _json.loads(content.decode('utf-8'))
+                users = data.get("users", {})
+                if users:
+                    try:
+                        with open(_DYNAMIC_USERS_FILE, 'w', encoding='utf-8') as f:
+                            _json.dump({"users": users}, f, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
+                    return users
+            except Exception:
+                pass
+        # محاولة القراءة من الملف المحلي
+        if os.path.exists(_DYNAMIC_USERS_FILE):
+            try:
+                with open(_DYNAMIC_USERS_FILE, 'r', encoding='utf-8') as f:
+                    data = _json.load(f)
+                    users = data.get("users", {})
+                    if users:
+                        return users
+            except Exception:
+                pass
+        # الرجوع إلى المستخدمين الثابتين
+        return dict(_DEFAULT_PREDEFINED_USERS)
+
+def save_dynamic_users(users_dict):
+    """حفظ قائمة المستخدمين إلى الملف المحلي + GitHub"""
+    with _DYN_USERS_LOCK:
+        content = _json.dumps({"users": users_dict}, ensure_ascii=False, indent=2).encode('utf-8')
+        try:
+            with open(_DYNAMIC_USERS_FILE, 'w', encoding='utf-8') as f:
+                f.write(content.decode('utf-8'))
+        except Exception:
+            pass
+        token, repo, branch = _dyn_github_params()
+        _dyn_upload_github("data/dyn_users.json", content, token, repo, branch, "تحديث قائمة المستخدمين")
+
+def add_dynamic_user(user_id, name, icon="fas fa-user", color="#6c757d"):
+    """إضافة مستخدم جديد"""
+    users = load_dynamic_users()
+    if user_id in users:
+        return False, "المستخدم موجود بالفعل"
+    if not user_id.startswith("user_"):
+        return False, "يجب أن يبدأ المعرف بـ user_"
+    users[user_id] = {"id": user_id, "name": name, "icon": icon, "color": color}
+    save_dynamic_users(users)
+    return True, "تم إضافة المستخدم بنجاح"
+
+def delete_dynamic_user(user_id):
+    """حذف مستخدم (لا يمكن حذف user_1)"""
+    if user_id == "user_1":
+        return False, "لا يمكن حذف المستخدم الأساسي"
+    users = load_dynamic_users()
+    if user_id not in users:
+        return False, "المستخدم غير موجود"
+    del users[user_id]
+    save_dynamic_users(users)
+    return True, "تم حذف المستخدم"
+
+# ── حسابات تسجيل الدخول ──────────────────────────────────────
+
+_ACCTS_LOCK = __import__('threading').Lock()
+
+def load_user_accounts():
+    with _ACCTS_LOCK:
+        token, repo, branch = _dyn_github_params()
+        content = _dyn_download_github("data/user_accounts.json", token, repo, branch)
+        if content:
+            try:
+                data = _json.loads(content.decode('utf-8'))
+                if data:
+                    try:
+                        with open(_USER_ACCOUNTS_FILE, 'w', encoding='utf-8') as f:
+                            _json.dump(data, f, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
+                    return data
+            except Exception:
+                pass
+        if os.path.exists(_USER_ACCOUNTS_FILE):
+            try:
+                with open(_USER_ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
+                    return _json.load(f)
+            except Exception:
+                pass
+        # حساب افتراضي لن يُستخدم مباشرة
+        return {}
+
+def save_user_accounts(accounts):
+    with _ACCTS_LOCK:
+        content = _json.dumps(accounts, ensure_ascii=False, indent=2).encode('utf-8')
+        try:
+            with open(_USER_ACCOUNTS_FILE, 'w', encoding='utf-8') as f:
+                f.write(content.decode('utf-8'))
+        except Exception:
+            pass
+        token, repo, branch = _dyn_github_params()
+        _dyn_upload_github("data/user_accounts.json", content, token, repo, branch, "تحديث حسابات المستخدمين")
+
+def authenticate_platform_user(username, password):
+    """التحقق من بيانات الدخول — يعيد username أو None"""
+    accounts = load_user_accounts()
+    if username not in accounts:
+        return None
+    hashed = _hashlib.sha256(password.encode()).hexdigest()
+    if accounts[username].get("password") == hashed:
+        return username
+    return None
+
+def create_platform_account(username, password, role="user"):
+    """إنشاء حساب جديد"""
+    if len(username) < 3:
+        return False, "اسم المستخدم يجب أن يكون 3 أحرف على الأقل"
+    if len(password) < 6:
+        return False, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"
+    accounts = load_user_accounts()
+    if username in accounts:
+        return False, "اسم المستخدم موجود مسبقاً"
+    accounts[username] = {
+        "username": username,
+        "password": _hashlib.sha256(password.encode()).hexdigest(),
+        "role": role,
+        "created_at": __import__('datetime').datetime.now().isoformat(),
+    }
+    save_user_accounts(accounts)
+    return True, "تم إنشاء الحساب بنجاح"
+
+def delete_platform_account(username):
+    accounts = load_user_accounts()
+    if username not in accounts:
+        return False, "الحساب غير موجود"
+    del accounts[username]
+    save_user_accounts(accounts)
+    return True, "تم حذف الحساب"
