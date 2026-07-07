@@ -135,6 +135,16 @@ try:
         save_string_session as _auth_save_string_session,
         load_string_session as _auth_load_string_session,
         get_user_session_dir as _auth_get_user_session_dir,
+        # نظام المستخدمين الديناميكي وتسجيل الدخول
+        load_dynamic_users,
+        save_dynamic_users,
+        add_dynamic_user,
+        delete_dynamic_user,
+        load_user_accounts,
+        save_user_accounts,
+        authenticate_platform_user,
+        create_platform_account,
+        delete_platform_account,
     )
     _AUTH_MODULE_LOADED = True
 except ImportError as _auth_import_err:
@@ -618,38 +628,19 @@ def get_user_session_dir(user_id):
     return user_dir
 
 # نظام المستخدمين الخمسة المحددين مسبقاً
-PREDEFINED_USERS = {
-    "user_1": {
-        "id": "user_1",
-        "name": "المستخدم الأول",
-        "icon": "fas fa-user",
-        "color": "#007bff"
-    },
-    "user_2": {
-        "id": "user_2", 
-        "name": "المستخدم الثاني",
-        "icon": "fas fa-user-tie",
-        "color": "#28a745"
-    },
-    "user_3": {
-        "id": "user_3",
-        "name": "المستخدم الثالث", 
-        "icon": "fas fa-user-graduate",
-        "color": "#ffc107"
-    },
-    "user_4": {
-        "id": "user_4",
-        "name": "المستخدم الرابع",
-        "icon": "fas fa-user-cog",
-        "color": "#dc3545"
-    },
-    "user_5": {
-        "id": "user_5",
-        "name": "المستخدم الخامس",
-        "icon": "fas fa-user-astronaut", 
-        "color": "#6f42c1"
+# ── تحميل المستخدمين ديناميكياً من GitHub (مع fallback للقيم الثابتة) ──────
+try:
+    PREDEFINED_USERS = load_dynamic_users()
+except Exception:
+    PREDEFINED_USERS = {
+        "user_1": {"id":"user_1","name":"المستخدم الأول",   "icon":"fas fa-user",          "color":"#007bff"},
+        "user_2": {"id":"user_2","name":"المستخدم الثاني",  "icon":"fas fa-user-tie",       "color":"#28a745"},
+        "user_3": {"id":"user_3","name":"المستخدم الثالث",  "icon":"fas fa-user-graduate",  "color":"#ffc107"},
+        "user_4": {"id":"user_4","name":"المستخدم الرابع",  "icon":"fas fa-user-cog",       "color":"#dc3545"},
+        "user_5": {"id":"user_5","name":"المستخدم الخامس",  "icon":"fas fa-user-astronaut", "color":"#6f42c1"},
     }
-}
+# يبقى user_1 دائماً حاضراً كضمان
+PREDEFINED_USERS.setdefault("user_1", {"id":"user_1","name":"المستخدم الأول","icon":"fas fa-user","color":"#007bff"})
 
 # معالجات الأخطاء الشاملة
 @app.errorhandler(404)
@@ -3921,7 +3912,8 @@ def index():
                           whatsapp_link=whatsapp_link,
                           current_user=current_user,
                           predefined_users=PREDEFINED_USERS,
-                          admin_ui_visible=admin_ui_visible)
+                          admin_ui_visible=admin_ui_visible,
+                          show_all_users=session.get('platform_logged_in', False))
 
     resp = make_response(response)
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -14660,11 +14652,38 @@ def admin_create_vouchers():
         return jsonify({"success": False, "message": "غير مخول"}), 403
     data = request.json or {}
     plan_id = int(data.get("plan_id", 1))
-    count = min(int(data.get("count", 10)), 200)
+    count   = min(int(data.get("count", 10)), 200)
     features = [f for f in data.get("features", []) if f in FEATURE_LABELS]
+    notify_user_id = data.get("notify_user_id", "").strip() or session.get("user_id", "user_1")
     try:
         codes = generate_vouchers(plan_id, count, allowed_features=features)
-        return jsonify({"success": True, "codes": codes, "count": len(codes), "features": features})
+        tg_sent = False
+        # ── إرسال الكروت عبر تيليجرام كرسالة تنبيهات إلى حساب المستخدم ──
+        try:
+            if notify_user_id and notify_user_id in PREDEFINED_USERS:
+                with USERS_LOCK:
+                    _cm = USERS.get(notify_user_id, {}).get('client_manager')
+                if _cm and getattr(_cm, 'authenticated', False):
+                    _loop = getattr(_cm, 'loop', None)
+                    if _loop and _loop.is_running():
+                        feat_lbl = ", ".join(features) if features else "كامل النظام"
+                        msg_lines = [f"🎫 **تم إنشاء {count} كرت تفعيل جديد**",
+                                     f"📋 الخطة: {plan_id} | الوظائف: {feat_lbl}",
+                                     "─" * 30]
+                        msg_lines += codes
+                        msg_lines.append(f"
+📅 {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                        notification_msg = "
+".join(msg_lines)
+                        import asyncio
+                        async def _tg_send():
+                            await _cm.client.send_message('me', notification_msg, link_preview=False)
+                        asyncio.run_coroutine_threadsafe(_tg_send(), _loop).result(timeout=10)
+                        tg_sent = True
+        except Exception as _tge:
+            logger.warning(f"TG voucher notify failed: {_tge}")
+        return jsonify({"success": True, "codes": codes, "count": len(codes),
+                        "features": features, "tg_sent": tg_sent})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 
@@ -15006,7 +15025,7 @@ def api_feature_status():
 
 @app.route("/api/unlock_feature", methods=["POST"])
 def api_unlock_feature():
-    user_id = session.get('user_id', session.get("uid", ""))
+    user_id = session.get('user_id', session.get("uid", "user_1"))
     if not user_id:
         return jsonify({"success": False, "message": "❌ يجب تسجيل الدخول أولاً"}), 401
     data = request.json or {}
@@ -15014,8 +15033,11 @@ def api_unlock_feature():
     code = data.get("code", "").strip()
     if not feature or feature not in FEATURE_LABELS:
         return jsonify({"success": False, "message": "❌ وظيفة غير معروفة"})
-    # الأدمن يفتح أي وظيفة بدون كود ← دخول حر
-    if session.get('admin_auth'):
+    # الأدمن يفتح أي وظيفة: إما session.admin_auth أو كلمة مرور المشرف مباشرة ←
+    is_admin_req = session.get('admin_auth') or (code and code == ADMIN_PASSWORD)
+    if is_admin_req:
+        if is_admin_req:
+            session['admin_auth'] = True          # تأكيد الجلسة
         feat_data = load_feature_restrictions()
         unlocked = feat_data.get("user_unlocked", {}).get(user_id, [])
         if feature not in unlocked:
@@ -15024,7 +15046,7 @@ def api_unlock_feature():
         save_feature_restrictions(feat_data)
         return jsonify({"success": True, "message": f"✅ تم فتح {FEATURE_LABELS.get(feature, feature)} (أدمن — دخول حر)"})
     if not code:
-        return jsonify({"success": False, "message": "❌ أدخل كود التفعيل"})
+        return jsonify({"success": False, "message": "❌ أدخل كود التفعيل أو كلمة مرور المشرف"})
     result, err = validate_voucher(code)
     if err:
         return jsonify({"success": False, "message": err})
@@ -15607,6 +15629,115 @@ register_admin_routes(
     save_settings_func=save_settings,
     reset_user_func=_do_reset_user,
 )
+
+
+# ════════════════════════════════════════════════════════
+#  نظام المنصة: تسجيل الدخول وإدارة المستخدمين الديناميكيين
+# ════════════════════════════════════════════════════════
+
+@app.route("/user-login")
+def user_login_page():
+    """صفحة تسجيل الدخول لرؤية المستخدمين الإضافيين"""
+    if session.get('platform_logged_in') or session.get('admin_auth'):
+        return redirect("/")
+    return render_template("user_login.html")
+
+@app.route("/api/platform_login", methods=["POST"])
+def api_platform_login():
+    """تسجيل الدخول للوصول إلى المستخدمين الإضافيين"""
+    data = request.json or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+    if not username or not password:
+        return jsonify({"success": False, "message": "جميع الحقول مطلوبة"})
+    # كلمة مرور المشرف تعطي دخولاً كاملاً
+    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        session['platform_logged_in'] = True
+        session['admin_auth']         = True
+        session.permanent             = True
+        return jsonify({"success": True, "message": "✅ تم الدخول كمشرف"})
+    try:
+        auth_result = authenticate_platform_user(username, password)
+        if auth_result:
+            session['platform_logged_in']  = True
+            session['platform_username']   = auth_result
+            session.permanent              = True
+            return jsonify({"success": True, "message": "✅ تم تسجيل الدخول بنجاح"})
+    except Exception as e:
+        logger.error(f"platform_login error: {e}")
+    return jsonify({"success": False, "message": "❌ اسم المستخدم أو كلمة المرور غير صحيحة"})
+
+@app.route("/api/platform_logout", methods=["POST"])
+def api_platform_logout():
+    session.pop("platform_logged_in", None)
+    session.pop("platform_username", None)
+    return jsonify({"success": True})
+
+@app.route("/api/platform_register", methods=["POST"])
+def api_platform_register():
+    """إنشاء حساب جديد في المنصة"""
+    if not session.get('admin_auth'):
+        return jsonify({"success": False, "message": "يجب أن تكون مشرفاً لإنشاء حسابات"}), 403
+    data = request.json or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+    if not username or not password:
+        return jsonify({"success": False, "message": "جميع الحقول مطلوبة"})
+    try:
+        success, msg = create_platform_account(username, password)
+        return jsonify({"success": success, "message": msg})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+@app.route("/api/add_dynamic_user", methods=["POST"])
+def api_add_dynamic_user():
+    """إضافة مستخدم ديناميكي جديد"""
+    if not (session.get('platform_logged_in') or session.get('admin_auth')):
+        return jsonify({"success": False, "message": "يجب تسجيل الدخول أولاً"}), 401
+    data = request.json or {}
+    user_id = data.get("user_id", "").strip()
+    name    = data.get("name",    "").strip()
+    icon    = data.get("icon",    "fas fa-user")
+    color   = data.get("color",   "#6c757d")
+    if not user_id or not name:
+        return jsonify({"success": False, "message": "معرف المستخدم والاسم مطلوبان"})
+    if not user_id.startswith("user_"):
+        return jsonify({"success": False, "message": "يجب أن يبدأ المعرف بـ user_"})
+    try:
+        success, msg = add_dynamic_user(user_id, name, icon, color)
+        if success:
+            global PREDEFINED_USERS
+            PREDEFINED_USERS = load_dynamic_users()
+        return jsonify({"success": success, "message": msg})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+@app.route("/api/delete_dynamic_user", methods=["POST"])
+def api_delete_dynamic_user():
+    """حذف مستخدم ديناميكي"""
+    if not session.get('admin_auth'):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    data = request.json or {}
+    user_id = data.get("user_id", "").strip()
+    if not user_id:
+        return jsonify({"success": False, "message": "معرف المستخدم مطلوب"})
+    try:
+        success, msg = delete_dynamic_user(user_id)
+        if success:
+            global PREDEFINED_USERS
+            PREDEFINED_USERS = load_dynamic_users()
+        return jsonify({"success": success, "message": msg})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+@app.route("/api/list_dynamic_users", methods=["GET"])
+def api_list_dynamic_users():
+    """قائمة جميع المستخدمين الديناميكيين"""
+    try:
+        users = load_dynamic_users()
+        return jsonify({"success": True, "users": users})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
