@@ -14667,14 +14667,16 @@ def admin_create_vouchers():
                     _loop = getattr(_cm, 'loop', None)
                     if _loop and _loop.is_running():
                         feat_lbl = ", ".join(features) if features else "كامل النظام"
-                        msg_lines = [f"🎫 **تم إنشاء {count} كرت تفعيل جديد**",
-                                     f"📋 الخطة: {plan_id} | الوظائف: {feat_lbl}",
-                                     "─" * 30]
+                        msg_lines = [
+                            "🎫 **تم إنشاء " + str(count) + " كرت تفعيل جديد**",
+                            "📋 الخطة: " + str(plan_id) + " | الوظائف: " + feat_lbl,
+                            "─" * 30,
+                        ]
                         msg_lines += codes
-                        msg_lines.append(f"
-📅 {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}")
-                        notification_msg = "
-".join(msg_lines)
+                        msg_lines.append(
+                            "\n📅 " + __import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')
+                        )
+                        notification_msg = "\n".join(msg_lines)
                         import asyncio
                         async def _tg_send():
                             await _cm.client.send_message('me', notification_msg, link_preview=False)
