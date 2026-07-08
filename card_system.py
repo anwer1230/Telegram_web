@@ -41,7 +41,8 @@ def load_cards_data():
             "plans": [
                 {"id": 1, "name": "يومية",   "time_limit": 86400,   "data_limit": 5368709120,  "profile_name": "daily"},
                 {"id": 2, "name": "أسبوعية", "time_limit": 604800,  "data_limit": 10737418240, "profile_name": "weekly"},
-                {"id": 3, "name": "شهرية",   "time_limit": 2592000, "data_limit": 32212254720, "profile_name": "monthly"}
+                {"id": 3, "name": "شهرية",   "time_limit": 2592000, "data_limit": 32212254720, "profile_name": "monthly"},
+                {"id": 4, "name": "دائمة",   "time_limit": 0,       "data_limit": 0,           "profile_name": "unlimited"}
             ],
             "vouchers": [],
             "active_card_sessions": []
@@ -77,20 +78,29 @@ def voucher_display_plan_name(v, plans=None):
 
 
 def generate_vouchers(plan_id, count=10, allowed_features=None):
-    """إنشاء قسائم بطاقات جديدة مع تحديد الوظائف التي تفتحها"""
+    """إنشاء قسائم بطاقات جديدة — كل كرت من 9 أرقام فقط"""
+    import random
     data = load_cards_data()
     plan = next((p for p in data["plans"] if p["id"] == plan_id), None)
     if not plan:
         raise ValueError("الخطة غير موجودة")
     if allowed_features is None:
         allowed_features = []
+    # جمع الأكواد الموجودة لضمان عدم التكرار
+    existing_codes = {v.get("code") for v in data["vouchers"] if v.get("code")}
     codes = []
     for _ in range(count):
-        raw = f"{secrets.token_hex(3).upper()}-{secrets.token_hex(3).upper()}"
-        normalized = raw.replace("-", "").upper()
-        hashed = hashlib.sha256(normalized.encode()).hexdigest()
+        # توليد كود من 9 أرقام عشوائية فريد
+        attempts = 0
+        while attempts < 10000:
+            code = str(random.randint(100000000, 999999999))
+            if code not in existing_codes:
+                break
+            attempts += 1
+        existing_codes.add(code)
+        hashed = hashlib.sha256(code.encode()).hexdigest()
         data["vouchers"].append({
-            "code": raw,
+            "code": code,
             "code_hash": hashed,
             "plan_id": plan_id,
             "plan_name": plan["name"],
@@ -100,14 +110,16 @@ def generate_vouchers(plan_id, count=10, allowed_features=None):
             "used_at": None,
             "expires_at": None
         })
-        codes.append(raw)
+        codes.append(code)
     save_cards_data(data)
     return codes
 
 
 def validate_voucher(code):
-    """التحقق من صحة قسيمة البطاقة"""
-    normalized = code.strip().replace("-", "").upper()
+    """التحقق من صحة قسيمة البطاقة — يدعم الكروت الجديدة (9 أرقام) والقديمة (Hex)"""
+    stripped = code.strip()
+    # محاولة التحقق كـ 9 أرقام أولاً
+    normalized = stripped
     hashed = hashlib.sha256(normalized.encode()).hexdigest()
     data = load_cards_data()
     voucher = next((v for v in data["vouchers"] if v["code_hash"] == hashed), None)
@@ -132,11 +144,11 @@ def activate_card_voucher(code, client_ip="0.0.0.0"):
     plan = result["plan"]
     data = load_cards_data()
 
-    # تحديث حالة القسيمة
+    # تحديث حالة القسيمة (يدعم الصيغتين: 9 أرقام والقديمة Hex)
+    # نستخدم code_hash المحفوظ في voucher مباشرةً بدلاً من إعادة الحساب
+    target_hash = voucher.get("code_hash", "")
     for v in data["vouchers"]:
-        normalized = code.strip().replace("-", "").upper()
-        hashed = hashlib.sha256(normalized.encode()).hexdigest()
-        if v["code_hash"] == hashed:
+        if v.get("code_hash") == target_hash:
             v["status"] = "used"
             v["used_at"] = datetime.now().isoformat()
             break

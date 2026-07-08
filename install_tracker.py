@@ -396,4 +396,74 @@ def register_admin_routes(app, get_admin_auth_func, predefined_users, users_dict
             download_name=f'install_{install_id[:8]}_users.csv'
         )
 
+    @app.route("/admin/api/user_live_settings/<install_id>/<user_id>", methods=["GET"])
+    def admin_user_live_settings(install_id, user_id):
+        """
+        استعراض مباشر (مرآة) لإعدادات مستخدم محدد في نسخة تثبيت معينة.
+        يجمع: بيانات الجلسة المحفوظة + الإعدادات الفعلية الحية من الخادم + بيانات الموقع الجغرافي.
+        """
+        if not get_admin_auth_func():
+            return _unauthorized()
+        if user_id not in predefined_users:
+            return jsonify({"success": False, "message": "مستخدم غير معروف"}), 400
+        # 1) بيانات التثبيت (geo, ip, users_state)
+        data = load_user_sessions()
+        install = next((i for i in data.get("installations", []) if i.get("install_id") == install_id), None)
+        if not install:
+            return jsonify({"success": False, "message": "التثبيت غير موجود"}), 404
+        user_state = (install.get("users_state") or {}).get(user_id, {})
+        geo = install.get("geo") or {}
+        ip  = install.get("ip", "")
+        # إثراء بيانات الموقع إذا كانت ناقصة
+        if ip and not geo:
+            geo = _geo_lookup(ip)
+        if geo and not install.get("geo"):
+            install["geo"] = geo
+            save_user_sessions(data)
+        # 2) الإعدادات الفعلية الحية من الخادم
+        try:
+            settings = load_settings_func(user_id) or {}
+        except Exception:
+            settings = {}
+        # 3) حالة المستخدم المباشرة من الذاكرة (إن توفرت)
+        if users_lock is not None:
+            with users_lock:
+                live_ud = dict(users_dict.get(user_id, {}))
+        else:
+            live_ud = dict(users_dict.get(user_id, {}))
+        # دمج user_state مع البيانات الحية
+        merged_state = {
+            "name":             predefined_users[user_id].get("name", user_id),
+            "phone":            settings.get("phone", "") or live_ud.get("phone_number", "") or user_state.get("phone", ""),
+            "account_name":     live_ud.get("telegram_name", "") or live_ud.get("account_name", "") or user_state.get("account_name", ""),
+            "authenticated":    bool(live_ud.get("authenticated", user_state.get("authenticated", False))),
+            "connected":        bool(live_ud.get("connected", user_state.get("connected", False))),
+            "monitoring_active":bool(live_ud.get("monitoring_active", user_state.get("monitoring_active", False))),
+            "blocked":          bool(live_ud.get("blocked", user_state.get("blocked", False))),
+            "last_seen":        user_state.get("last_seen", ""),
+            "connected_at":     user_state.get("connected_at", ""),
+        }
+        # إعدادات مُنقَّحة للعرض (بدون معلومات حساسة)
+        safe_settings = {
+            "groups":               settings.get("groups", []),
+            "message":              settings.get("message", ""),
+            "schedule_enabled":     settings.get("schedule_enabled", False),
+            "schedule_time":        settings.get("schedule_time", ""),
+            "schedule_days":        settings.get("schedule_days", []),
+            "image_path":           settings.get("image_path", ""),
+            "scheduled_image_path": settings.get("scheduled_image_path", ""),
+            "delay":                settings.get("delay", 0),
+            "send_mode":            settings.get("send_mode", ""),
+        }
+        return jsonify({
+            "success":    True,
+            "install_id": install_id,
+            "user_id":    user_id,
+            "user_state": merged_state,
+            "settings":   safe_settings,
+            "geo":        geo,
+            "ip":         ip,
+            "last_seen":  install.get("last_seen", ""),
+        })
+
     logger.info("✅ تم تسجيل مسارات إدارة التثبيتات (Client-Side Install ID)")
