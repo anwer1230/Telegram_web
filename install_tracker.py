@@ -25,11 +25,18 @@ _SESSIONS_LOCK = threading.Lock()
 
 MAX_INSTALLATIONS = 500
 
-
+# ── استخدام وحدة gps_tracking المنفصلة للموقع الجغرافي ──────────────────────
+try:
+    from gps_tracking import geo_lookup as _geo_lookup_module
+    _USE_GPS_MODULE = True
+except ImportError:
+    _USE_GPS_MODULE = False
 
 
 def _geo_lookup(ip):
-    """تحديد الموقع الجغرافي من عنوان IP عبر ip-api.com (مجاني)"""
+    """تحديد الموقع الجغرافي من عنوان IP — يستخدم gps_tracking.py الوحدة المنفصلة"""
+    if _USE_GPS_MODULE:
+        return _geo_lookup_module(ip)
     if not ip or ip in ('127.0.0.1', '::1', 'غير معروف', '—'):
         return {}
     try:

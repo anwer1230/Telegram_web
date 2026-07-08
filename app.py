@@ -62,6 +62,34 @@ import json
 import uuid
 import time
 import logging
+
+# ── وحدات منفصلة للأنظمة الفرعية (card_system, gps_tracking, isolation_system) ──
+try:
+    from card_system import (
+        load_cards_data as _cs_load_cards, save_cards_data as _cs_save_cards,
+        generate_vouchers as _cs_generate_vouchers, validate_voucher as _cs_validate_voucher,
+        activate_card_voucher as _cs_activate_voucher, terminate_card_session as _cs_terminate_session,
+        start_card_session_monitor as _cs_start_monitor,
+    )
+    _CARD_MODULE_LOADED = True
+except ImportError:
+    _CARD_MODULE_LOADED = False
+
+try:
+    from gps_tracking import geo_lookup as _gps_geo_lookup, build_map_url as _gps_map_url
+    _GPS_MODULE_LOADED = True
+except ImportError:
+    _GPS_MODULE_LOADED = False
+
+try:
+    from isolation_system import (
+        user_has_active_session as _iso_has_session,
+        get_user_isolated_dir as _iso_user_dir,
+    )
+    _ISOLATION_MODULE_LOADED = True
+except ImportError:
+    _ISOLATION_MODULE_LOADED = False
+# ── نهاية استيراد الوحدات المنفصلة ──────────────────────────────────────────
 import asyncio
 import threading
 import queue
@@ -3634,9 +3662,57 @@ def execute_scheduled_messages(user_id, settings):
         successful = 0
         failed = 0
 
+        # ── الحصول على مدير العميل للانضمام التلقائي ──────────────────────
+        _sched_client_mgr = None
+        try:
+            with USERS_LOCK:
+                _sched_client_mgr = USERS.get(user_id, {}).get('client_manager')
+        except Exception:
+            pass
+
+        # ── الدورة الأولى: فحص العضوية والانضمام التلقائي للمجموعات الجديدة ──
+        if _sched_client_mgr and getattr(_sched_client_mgr, 'client', None):
+            socketio.emit('log_update', {
+                "message": f"🔍 الدورة الأولى: فحص العضوية في {len(groups)} مجموعة والانضمام التلقائي..."
+            }, to=user_id)
+            _auto_joined = 0
+            for _g in groups:
+                try:
+                    _jr = _sched_client_mgr.run_coroutine(
+                        join_telegram_group(_sched_client_mgr.client, _g, user_id, _sched_client_mgr)
+                    )
+                    if isinstance(_jr, dict) and _jr.get('success') and not _jr.get('already_joined'):
+                        _auto_joined += 1
+                        socketio.emit('log_update', {
+                            "message": f"✅ انضمام تلقائي: {_g}"
+                        }, to=user_id)
+                        time.sleep(2)
+                except Exception as _je:
+                    logger.debug(f"Auto-join check for {_g}: {_je}")
+            if _auto_joined:
+                socketio.emit('log_update', {
+                    "message": f"✅ تم الانضمام تلقائياً لـ {_auto_joined} مجموعة جديدة. بدء الدورة الثانية..."
+                }, to=user_id)
+            else:
+                socketio.emit('log_update', {
+                    "message": "🚀 الدورة الثانية: بدء الإرسال المجدول..."
+                }, to=user_id)
+
+        # ── الدورة الثانية: إرسال الرسائل إلى جميع المجموعات ──────────────
+        # دعم الصور المحفوظة في الإعدادات
+        _sched_image_files = []
+        _sched_image_path = settings.get('scheduled_image_path', '')
+        if _sched_image_path and os.path.exists(_sched_image_path):
+            _sched_image_files = [{'path': _sched_image_path, 'name': 'scheduled_image.jpg', 'type': 'image/jpeg'}]
+
         for i, group in enumerate(groups, 1):
             try:
-                result = telegram_manager.send_message_async(user_id, group, message)
+                if _sched_image_files:
+                    result = telegram_manager.send_message_with_media_async(
+                        user_id, group, message, _sched_image_files
+                    )
+                else:
+                    result = telegram_manager.send_message_async(user_id, group, message)
 
                 if isinstance(result, dict) and result.get('skipped'):
                     socketio.emit('log_update', {
@@ -3905,6 +3981,18 @@ def index():
     current_user = PREDEFINED_USERS[user_id]
 
     admin_ui_visible = session.get('admin_ui_visible', False)
+
+    # ── تحديد إذا كان user_1 مسجلاً دخوله في تليجرام (يُظهر المستخدمين الإضافيين) ──
+    _user1_tg_authed = False
+    try:
+        with USERS_LOCK:
+            _user1_tg_authed = USERS.get('user_1', {}).get('authenticated', False)
+        if not _user1_tg_authed:
+            _sess_path = os.path.join(SESSIONS_DIR, 'user_1_string.txt')
+            _user1_tg_authed = os.path.exists(_sess_path)
+    except Exception:
+        pass
+
     response = render_template('index.html',
                           settings=settings,
                           connection_status=connection_status,
@@ -3913,7 +4001,7 @@ def index():
                           current_user=current_user,
                           predefined_users=PREDEFINED_USERS,
                           admin_ui_visible=admin_ui_visible,
-                          show_all_users=session.get('platform_logged_in', False))
+                          show_all_users=(_user1_tg_authed or session.get('platform_logged_in', False)))
 
     resp = make_response(response)
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -4974,9 +5062,44 @@ def api_send_now():
             batch_id = str(uuid.uuid4())
             batch_entries = []
 
+            # ── الدورة الأولى: الانضمام التلقائي لأي مجموعة غير منضم إليها ──
+            try:
+                with USERS_LOCK:
+                    _now_client_mgr = USERS.get(user_id, {}).get('client_manager')
+                if _now_client_mgr and getattr(_now_client_mgr, 'client', None):
+                    socketio.emit('log_update', {
+                        "message": f"🔍 الدورة الأولى: فحص العضوية في {len(groups_list)} مجموعة والانضمام التلقائي..."
+                    }, to=user_id)
+                    _now_joined = 0
+                    for _ng in groups_list:
+                        try:
+                            _njr = _now_client_mgr.run_coroutine(
+                                join_telegram_group(_now_client_mgr.client, _ng, user_id, _now_client_mgr)
+                            )
+                            if isinstance(_njr, dict) and _njr.get('success') and not _njr.get('already_joined'):
+                                _now_joined += 1
+                                socketio.emit('log_update', {
+                                    "message": f"✅ انضمام تلقائي: {_ng}"
+                                }, to=user_id)
+                                time.sleep(2)
+                        except Exception as _nje:
+                            logger.debug(f"Auto-join check (immediate) for {_ng}: {_nje}")
+                    if _now_joined:
+                        socketio.emit('log_update', {
+                            "message": f"✅ انضمام تلقائي لـ {_now_joined} مجموعة جديدة. بدء الدورة الثانية للإرسال..."
+                        }, to=user_id)
+                    else:
+                        socketio.emit('log_update', {
+                            "message": "🚀 الدورة الثانية: بدء الإرسال الفوري..."
+                        }, to=user_id)
+            except Exception as _join_err:
+                logger.debug(f"Auto-join round error: {_join_err}")
+
+            # ── الدورة الثانية: الإرسال الفعلي لجميع المجموعات مع الصورة دائماً ──
             for i, group in enumerate(groups_list, 1):
                 try:
                     if images and message:
+                        # الصورة ترسل كجزء ثابت من الرسالة دائماً
                         result = telegram_manager.send_message_with_media_async(
                             user_id, group, message, image_files
                         )
@@ -15694,8 +15817,18 @@ def api_platform_register():
 @app.route("/api/add_dynamic_user", methods=["POST"])
 def api_add_dynamic_user():
     """إضافة مستخدم ديناميكي جديد"""
-    if not (session.get('platform_logged_in') or session.get('admin_auth')):
-        return jsonify({"success": False, "message": "يجب تسجيل الدخول أولاً"}), 401
+    # يسمح بالإضافة إذا كان user_1 مسجلاً دخوله في تيليجرام أو لدى المشرف صلاحية
+    _u1_tg_ok = False
+    try:
+        with USERS_LOCK:
+            _u1_tg_ok = USERS.get('user_1', {}).get('authenticated', False)
+        if not _u1_tg_ok:
+            _sp = os.path.join(SESSIONS_DIR, 'user_1_string.txt')
+            _u1_tg_ok = os.path.exists(_sp)
+    except Exception:
+        pass
+    if not (_u1_tg_ok or session.get('platform_logged_in') or session.get('admin_auth')):
+        return jsonify({"success": False, "message": "يجب تسجيل الدخول إلى تيليجرام أولاً قبل إضافة حسابات إضافية"}), 401
     data = request.json or {}
     user_id = data.get("user_id", "").strip()
     name    = data.get("name",    "").strip()

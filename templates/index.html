@@ -60,6 +60,102 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
     <style>
+        /* ══════════════════════════════════════════════════
+           تأثير زجاجي شفاف (Glassmorphism) للواجهة
+           ══════════════════════════════════════════════════ */
+        body {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%) !important;
+            min-height: 100vh;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.07) !important;
+            backdrop-filter: blur(14px) !important;
+            -webkit-backdrop-filter: blur(14px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 16px !important;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.28), 0 1.5px 0 rgba(255,255,255,0.08) inset !important;
+            color: #e8eaf6 !important;
+        }
+        .card-header {
+            border-radius: 16px 16px 0 0 !important;
+            backdrop-filter: blur(8px) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.12) !important;
+        }
+        .card-body { color: #d0d4ef; }
+        .form-control, .form-select {
+            background: rgba(255,255,255,0.08) !important;
+            border: 1px solid rgba(255,255,255,0.18) !important;
+            color: #e8eaf6 !important;
+            border-radius: 10px !important;
+        }
+        .form-control::placeholder { color: rgba(255,255,255,0.4) !important; }
+        .form-control:focus, .form-select:focus {
+            background: rgba(255,255,255,0.14) !important;
+            border-color: #6c63ff !important;
+            box-shadow: 0 0 0 3px rgba(108,99,255,0.25) !important;
+            color: #fff !important;
+        }
+        .btn-outline-primary   { border-color:#6c63ff!important; color:#a5b4fc!important; }
+        .btn-outline-primary:hover { background:#6c63ff!important; color:#fff!important; }
+        .btn-outline-success   { border-color:#34d399!important; color:#6ee7b7!important; }
+        .btn-outline-success:hover { background:#34d399!important; color:#064e3b!important; }
+        .btn-outline-warning   { border-color:#fbbf24!important; color:#fde68a!important; }
+        .btn-outline-warning:hover { background:#fbbf24!important; color:#1c1400!important; }
+        .btn-outline-danger    { border-color:#f87171!important; color:#fca5a5!important; }
+        .btn-outline-danger:hover  { background:#f87171!important; color:#1a0000!important; }
+        .btn-outline-info      { border-color:#22d3ee!important; color:#a5f3fc!important; }
+        .btn-outline-info:hover    { background:#22d3ee!important; color:#083344!important; }
+        .btn-outline-dark      { border-color:#94a3b8!important; color:#cbd5e1!important; }
+        .btn-outline-dark:hover    { background:#94a3b8!important; color:#0f172a!important; }
+        .btn-primary   { background:linear-gradient(135deg,#6c63ff,#4e45d1)!important; border:none!important; }
+        .btn-success   { background:linear-gradient(135deg,#34d399,#059669)!important; border:none!important; }
+        .btn-warning   { background:linear-gradient(135deg,#fbbf24,#d97706)!important; border:none!important; color:#1c1400!important; }
+        .btn-danger    { background:linear-gradient(135deg,#f87171,#dc2626)!important; border:none!important; }
+        .btn-info      { background:linear-gradient(135deg,#22d3ee,#0891b2)!important; border:none!important; }
+        label, .form-label { color:#c7d2fe !important; font-weight:600; }
+        .text-muted { color:#94a3b8 !important; }
+        .badge.bg-primary  { background:#6c63ff!important; }
+        .badge.bg-success  { background:#059669!important; }
+        .badge.bg-warning  { background:#d97706!important; }
+        .badge.bg-danger   { background:#dc2626!important; }
+        .badge.bg-info     { background:#0891b2!important; }
+        .modal-content {
+            background: rgba(20,20,50,0.88) !important;
+            backdrop-filter: blur(24px) !important;
+            -webkit-backdrop-filter: blur(24px) !important;
+            border: 1px solid rgba(255,255,255,0.15) !important;
+            border-radius: 18px !important;
+            color: #e8eaf6 !important;
+        }
+        .modal-header { border-bottom:1px solid rgba(255,255,255,0.12)!important; }
+        .modal-footer { border-top:1px solid rgba(255,255,255,0.12)!important; }
+        .table { color:#d0d4ef!important; }
+        .table th { color:#a5b4fc!important; border-color:rgba(255,255,255,0.1)!important; }
+        .table td { border-color:rgba(255,255,255,0.07)!important; }
+        /* أيقونات بارزة وملونة */
+        .btn .fa-2x { filter:drop-shadow(0 2px 6px rgba(255,255,255,0.18)); transition:filter 0.2s; }
+        .btn:hover .fa-2x { filter:drop-shadow(0 4px 12px rgba(255,255,255,0.38)); }
+        .btn-outline-warning .fas.fa-search { color:#fbbf24!important; text-shadow:0 0 12px #fbbf24; }
+        .btn-outline-danger  .fas           { color:#f87171!important; text-shadow:0 0 10px #f87171; }
+        .btn-outline-success .fas           { color:#34d399!important; text-shadow:0 0 10px #34d399; }
+        .btn-outline-info    .fas           { color:#22d3ee!important; text-shadow:0 0 10px #22d3ee; }
+        .btn-outline-primary .fas           { color:#818cf8!important; text-shadow:0 0 10px #818cf8; }
+        .users-bar .card {
+            background: rgba(99,102,241,0.12) !important;
+            border: 1px solid rgba(99,102,241,0.3) !important;
+        }
+        .user-tab.active { box-shadow:0 0 16px rgba(108,99,255,0.5)!important; }
+        .list-group-item {
+            background:rgba(255,255,255,0.05)!important;
+            border:1px solid rgba(255,255,255,0.1)!important;
+            color:#d0d4ef!important;
+        }
+        .alert-info    { background:rgba(34,211,238,0.12)!important; border-color:rgba(34,211,238,0.3)!important; color:#a5f3fc!important; }
+        .alert-warning { background:rgba(251,191,36,0.12)!important; border-color:rgba(251,191,36,0.3)!important; color:#fde68a!important; }
+        .alert-success { background:rgba(52,211,153,0.12)!important; border-color:rgba(52,211,153,0.3)!important; color:#6ee7b7!important; }
+        .alert-danger  { background:rgba(248,113,113,0.12)!important; border-color:rgba(248,113,113,0.3)!important; color:#fca5a5!important; }
+        /* ══ نهاية Glassmorphism ══ */
+
         .header-title {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -443,10 +539,10 @@
                             </div>
                             {% else %}
                             <div style="display:inline-block;margin:2px;">
-                                <button class="btn user-tab" onclick="window.location='/user-login'"
-                                        style="border:2px dashed #6366f1;color:#a5b4fc;opacity:.75;font-size:0.75rem;"
-                                        title="تسجيل الدخول لرؤية المستخدمين الإضافيين">
-                                    <i class="fas fa-lock me-1"></i>دخول
+                                <button class="btn user-tab" onclick="showAddAccountNotification()"
+                                        style="border:2px dashed #6366f1;color:#a5b4fc;opacity:.85;font-size:0.8rem;"
+                                        title="إضافة حساب — يجب تسجيل الدخول أولاً">
+                                    <i class="fas fa-plus-circle me-1"></i>إضافة حساب
                                 </button>
                             </div>
                             {% endif %}
@@ -678,11 +774,30 @@
                                 </button>
                             </div>
                             <div class="col-6 col-md-4">
-                              <button type="button" class="btn btn-outline-warning w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center" id="btnSearchMyLinksDropdown" onclick="openSearchMyLinksTab('global')" style="min-height:90px;">
-                                  <i class="fas fa-search fa-2x mb-2"></i>
+                              <!-- زر البحث الموحد — يحتوي على روابطي المحفوظة ورسائلي بداخله -->
+                              <div class="btn btn-outline-warning w-100 h-100 py-2 d-flex flex-column align-items-center justify-content-center" id="btnSearchMyLinksDropdown" onclick="openSearchMyLinksTab('global')" style="min-height:90px;cursor:pointer;border-radius:8px;">
+                                  <i class="fas fa-search fa-2x mb-1 text-warning"></i>
                                   <span class="small fw-bold">البحث في روابطي</span>
-                                  <span style="font-size:0.62rem;opacity:0.7;margin-top:3px;">بحث · رسائل · دول</span>
-                              </button>
+                                  <!-- أيقونتا رسائلي والروابط المحفوظة داخل زر البحث -->
+                                  <div class="d-flex gap-1 mt-2" onclick="event.stopPropagation()">
+                                      <button type="button"
+                                              class="btn btn-warning btn-sm py-0 px-2"
+                                              style="font-size:0.62rem;border-radius:5px;"
+                                              onclick="(new bootstrap.Modal(document.getElementById('sentMessagesModal'))).show();"
+                                              title="رسائلي المُرسَلة">
+                                          <i class="fas fa-envelope me-1"></i>رسائلي
+                                          <span id="sentBatchesCount" class="badge bg-dark text-white ms-1" style="font-size:0.55rem;display:none;">0</span>
+                                      </button>
+                                      <button type="button"
+                                              id="btnSavedLinks"
+                                              class="btn btn-warning btn-sm py-0 px-2"
+                                              style="font-size:0.62rem;border-radius:5px;"
+                                              onclick="window.open('/saved_links','_blank')"
+                                              title="روابطي المحفوظة">
+                                          <i class="fas fa-bookmark me-1"></i>محفوظاتي
+                                      </button>
+                                  </div>
+                              </div>
                             </div>
                             <div class="col-6 col-md-4">
                                 <button type="button" class="btn btn-outline-danger w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center" id="btnAutoJoinAdvanced" data-bs-toggle="modal" data-bs-target="#autoJoinAdvancedModal">
@@ -705,19 +820,7 @@
                                     <span class="small fw-bold">الردود التلقائية</span>
                                 </button>
                             </div>
-                            <div class="col-6 col-md-4">
-                                <button type="button" class="btn btn-outline-info w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center" data-bs-toggle="modal" data-bs-target="#sentMessagesModal">
-                                    <i class="fas fa-envelope fa-2x mb-2"></i>
-                                    <span class="small fw-bold">📨 رسائلي</span>
-                                    <span id="sentBatchesCount" class="badge bg-primary mt-1" style="font-size:0.6rem;display:none;">0</span>
-                                </button>
-                            </div>
-                            <div class="col-6 col-md-4">
-                                <button type="button" id="btnSavedLinks" class="btn btn-outline-primary w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center" onclick="window.open('/saved_links','_blank')">
-                                    <i class="fas fa-bookmark fa-2x mb-2"></i>
-                                    <span class="small fw-bold">الروابط المحفوظة</span>
-                                </button>
-                            </div>
+                            <!-- تم نقل أيقونتَي "رسائلي" و"الروابط المحفوظة" داخل زر "البحث في روابطي" أعلاه -->
                             <!-- تم إخفاق زر سجلات النظام -->
                             <div class="col-6 col-md-4" id="sysLogsCardCol" style="display:none;">
                               <div class="position-relative w-100 h-100">
@@ -9189,6 +9292,31 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <script>
+// ── إشعار "إضافة حساب" عند عدم تسجيل الدخول في تيليجرام ──────────────────
+function showAddAccountNotification() {
+    // بناء مربع حوار بالأسلوب الزجاجي (glassmorphism)
+    const existing = document.getElementById('_addAccNotifOverlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = '_addAccNotifOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);';
+    overlay.innerHTML = `
+      <div style="background:rgba(20,20,60,0.92);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:32px 28px;max-width:360px;width:92%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+        <div style="font-size:3rem;margin-bottom:12px;">⚠️</div>
+        <h5 style="color:#fde68a;margin-bottom:12px;font-weight:700;">تنبيه</h5>
+        <p style="color:#d0d4ef;line-height:1.7;margin-bottom:20px;">
+          هناك حساب لم تسجل فيه بعد.<br>
+          <span style="color:#a5b4fc;">يجب تسجيل الدخول إلى الحساب الأساسي (user_1) عبر تيليجرام أولاً قبل إضافة حسابات إضافية.</span>
+        </p>
+        <button onclick="document.getElementById('_addAccNotifOverlay').remove()"
+                style="background:linear-gradient(135deg,#6c63ff,#4e45d1);color:#fff;border:none;border-radius:10px;padding:10px 30px;font-size:0.95rem;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(108,99,255,0.4);">
+          حسناً، فهمت
+        </button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
 // ── إضافة مستخدم ديناميكي ──────────────────────────────────────────────────
 function openAddUserModal() {
     document.getElementById('auUserId').value   = '';
