@@ -3992,6 +3992,10 @@ def index():
             _user1_tg_authed = os.path.exists(_sess_path)
     except Exception:
         pass
+    # تحديث الجلسة تلقائياً بناءً على حالة تيليجرام (مرتبط بالجلسة الحالية فقط)
+    if _user1_tg_authed and not session.get('platform_logged_in'):
+        session['platform_logged_in'] = True
+        session.permanent = True
 
     response = render_template('index.html',
                           settings=settings,
@@ -15817,18 +15821,9 @@ def api_platform_register():
 @app.route("/api/add_dynamic_user", methods=["POST"])
 def api_add_dynamic_user():
     """إضافة مستخدم ديناميكي جديد"""
-    # يسمح بالإضافة إذا كان user_1 مسجلاً دخوله في تيليجرام أو لدى المشرف صلاحية
-    _u1_tg_ok = False
-    try:
-        with USERS_LOCK:
-            _u1_tg_ok = USERS.get('user_1', {}).get('authenticated', False)
-        if not _u1_tg_ok:
-            _sp = os.path.join(SESSIONS_DIR, 'user_1_string.txt')
-            _u1_tg_ok = os.path.exists(_sp)
-    except Exception:
-        pass
-    if not (_u1_tg_ok or session.get('platform_logged_in') or session.get('admin_auth')):
-        return jsonify({"success": False, "message": "يجب تسجيل الدخول إلى تيليجرام أولاً قبل إضافة حسابات إضافية"}), 401
+    # يستخدم platform_logged_in الذي يُضبط تلقائياً في index() عند تسجيل user_1 في تيليجرام
+    if not (session.get('platform_logged_in') or session.get('admin_auth')):
+        return jsonify({"success": False, "message": "يجب تسجيل الدخول إلى تيليجرام أولاً ثم تحديث الصفحة"}), 401
     data = request.json or {}
     user_id = data.get("user_id", "").strip()
     name    = data.get("name",    "").strip()
