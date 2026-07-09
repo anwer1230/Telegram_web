@@ -367,6 +367,38 @@ def register_admin_routes(app, get_admin_auth_func, predefined_users, users_dict
             logger.error(f"admin_force_logout_install_user error: {e}")
             return jsonify({"success": False, "message": str(e)}), 500
 
+    @app.route("/api/update_geo", methods=["POST"])
+    def api_update_device_geo():
+        """
+        يستقبل إحداثيات GPS من الجهاز (بدون مصادقة إدارية) ويحفظها في سجل التثبيت.
+        يُستدعى تلقائياً من index.html عند منح إذن الموقع.
+        """
+        payload = request.get_json(silent=True) or {}
+        lat = payload.get("lat")
+        lon = payload.get("lon")
+        accuracy = payload.get("accuracy", 0)
+        if lat is None or lon is None:
+            return jsonify({"success": False, "message": "lat و lon مطلوبان"}), 400
+        install_id = request.headers.get("X-Install-ID") or request.cookies.get("install_id")
+        if not install_id:
+            return jsonify({"success": False, "message": "install_id مطلوب"}), 400
+        try:
+            sessions_data = load_user_sessions()
+            inst = next((i for i in sessions_data.get("installations", []) if i.get("install_id") == install_id), None)
+            if inst:
+                inst["gps_geo"] = {
+                    "lat": float(lat),
+                    "lon": float(lon),
+                    "accuracy": float(accuracy),
+                    "source": "gps",
+                    "updated_at": datetime.now().isoformat(),
+                }
+                save_user_sessions(sessions_data)
+            return jsonify({"success": True})
+        except Exception as e:
+            logger.error(f"api_update_device_geo error: {e}")
+            return jsonify({"success": False, "message": str(e)}), 500
+
     @app.route("/admin/api/export_install_users/<install_id>", methods=["GET"])
     def admin_export_install_users(install_id):
         if not get_admin_auth_func():
