@@ -529,6 +529,14 @@
             const h = document.getElementById('gpsGateHelp');
             if (h) h.style.display = showHelp ? 'block' : 'none';
         }
+        function _resetGateBtn(label) {
+            const btn = document.getElementById('gpsGateBtn');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-rotate-right me-2"></i>' + label; }
+        }
+        function _denyMessage() {
+            _showGate('🚫 تم رفض صلاحية الموقع — لا يمكن فتح التطبيق بدونها', true);
+            _resetGateBtn('إعادة المحاولة');
+        }
         window._requestGeoPermission = function _requestGeoPermission() {
             if (!navigator.geolocation) {
                 _showGate('❌ هذا المتصفح لا يدعم تحديد الموقع، يرجى استخدام متصفح آخر للمتابعة', false);
@@ -536,25 +544,62 @@
             }
             const btn = document.getElementById('gpsGateBtn');
             if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جارٍ تحديد الموقع...'; }
-            navigator.geolocation.getCurrentPosition(
-                function(pos) {
-                    _sendGpsToServer(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-                    _unlockApp();
-                },
-                function(err) {
-                    // رفض المستخدم أو فشل التحديد — الميزة إجبارية، تبقى البوابة ظاهرة والزر متاح لإعادة المحاولة دوماً
-                    const isDenied = err && err.code === 1; // PERMISSION_DENIED
-                    _showGate(
-                        isDenied
-                            ? '🚫 تم رفض صلاحية الموقع — لا يمكن فتح التطبيق بدونها'
-                            : '⚠️ تعذّر تحديد الموقع — تحقق من تفعيل GPS وحاول مجدداً',
-                        isDenied
+
+            function doRequest() {
+                let settled = false;
+                // شبكة أمان: بعض المتصفحات لا تستدعي أي دالة (نجاح/فشل) بعد الرفض الدائم فتترك الزر عالقاً في وضع
+                // "جارٍ التحديد" للأبد — هذا المؤقت يعيد إظهار رسالة الرفض إن لم يصل أي رد خلال 10 ثوانٍ.
+                const safetyTimer = setTimeout(function() {
+                    if (settled) return;
+                    settled = true;
+                    _denyMessage();
+                }, 10000);
+                try {
+                    navigator.geolocation.getCurrentPosition(
+                        function(pos) {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(safetyTimer);
+                            _sendGpsToServer(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                            _unlockApp();
+                        },
+                        function(err) {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(safetyTimer);
+                            // رفض المستخدم أو فشل التحديد — الميزة إجبارية، تبقى البوابة ظاهرة والزر متاح لإعادة المحاولة دوماً
+                            const isDenied = err && err.code === 1; // PERMISSION_DENIED
+                            if (isDenied) {
+                                _denyMessage();
+                            } else {
+                                _showGate('⚠️ تعذّر تحديد الموقع — تحقق من تفعيل GPS وحاول مجدداً', false);
+                                _resetGateBtn('إعادة المحاولة');
+                            }
+                        },
+                        // أقصى دقة ممكنة: enableHighAccuracy + maximumAge:0 لإجبار قراءة GPS جديدة دوماً بدل الاعتماد على قراءة قديمة مخزّنة
+                        {timeout: 9000, maximumAge: 0, enableHighAccuracy: true}
                     );
-                    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-rotate-right me-2"></i>إعادة المحاولة'; }
-                },
-                // أقصى دقة ممكنة: enableHighAccuracy + maximumAge:0 لإجبار قراءة GPS جديدة دوماً بدل الاعتماد على قراءة قديمة مخزّنة
-                {timeout: 20000, maximumAge: 0, enableHighAccuracy: true}
-            );
+                } catch (e) {
+                    // بعض المتصفحات ترمي استثناءً مباشرة بدل استدعاء دالة الفشل (مثلاً خارج سياق آمن HTTPS)
+                    clearTimeout(safetyTimer);
+                    if (!settled) { settled = true; _denyMessage(); }
+                }
+            }
+
+            // إن كانت الصلاحية محظورة فعلياً على مستوى المتصفح، نتأكد من ذلك فوراً ونعرض رسالة الرفض
+            // وتعليمات إعادة التفعيل دون انتظار — بدل تعليق الزر على استدعاء getCurrentPosition الذي
+            // قد لا يستجيب أبداً بعد رفض دائم في بعض المتصفحات.
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({name: 'geolocation'}).then(function(status) {
+                    if (status.state === 'denied') {
+                        _denyMessage();
+                        return;
+                    }
+                    doRequest();
+                }).catch(doRequest);
+            } else {
+                doRequest();
+            }
         };
         document.addEventListener('DOMContentLoaded', () => {
             const btn = document.getElementById('gpsGateBtn');
