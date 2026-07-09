@@ -485,63 +485,12 @@
     </script>
 
     <div class="container-fluid mt-4">
-        <!-- شريط المستخدمين في الأعلى -->
-        <div class="users-bar mb-4">
-            <div class="card">
-                <div class="card-body py-2">
-                    <div class="d-flex justify-content-center align-items-center flex-wrap">
-                        <small class="text-muted me-3 mb-2">اختر المستخدم:</small>
-                        <div class="user-tabs">
-                            {# ── جميع الحسابات المضافة ── #}
-                            {% for uid, user_data in predefined_users.items() %}
-                            <div style="position:relative;display:inline-block;margin:2px;">
-                                <button class="btn user-tab {% if uid == current_user.id %}active{% endif %}"
-                                        id="userTab_{{ uid }}"
-                                        data-user-id="{{ uid }}"
-                                        data-default-name="{{ user_data.name }}"
-                                        style="color:{{ user_data.color }};border-color:{{ user_data.color }};">
-                                    <img class="user-tab-avatar" id="userTabAvatar_{{ uid }}"
-                                         src="/api/account_avatar/{{ uid }}" alt=""
-                                         onerror="this.style.display='none';"
-                                         onload="this.style.display='inline-block';"
-                                         style="display:none;width:26px;height:26px;border-radius:50%;object-fit:cover;margin-left:6px;border:2px solid {{ user_data.color }};vertical-align:middle;">
-                                    <i class="{{ user_data.icon }} me-2"></i>
-                                    <span class="user-tab-name">{{ user_data.name }}</span>
-                                </button>
-                                <button class="btn btn-danger p-0 user-single-reset-btn"
-                                        data-uid="{{ uid }}" data-uname="{{ user_data.name }}"
-                                        title="إعادة تعيين {{ user_data.name }}"
-                                        onclick="openResetSingleModal(this); event.stopPropagation();"
-                                        style="position:absolute;top:-8px;left:-8px;width:20px;height:20px;border-radius:50%;font-size:0.55rem;line-height:20px;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);z-index:20;">
-                                    <i class="fas fa-redo-alt"></i>
-                                </button>
-                                {% if admin_ui_visible %}
-                                <button title="حذف {{ user_data.name }}"
-                                        onclick="deleteDynUser('{{ uid }}'); event.stopPropagation();"
-                                        style="position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;font-size:0.5rem;background:#ef4444;color:#fff;border:none;cursor:pointer;z-index:20;">✕</button>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
-                            {# ── زر إضافة حساب — دائماً ظاهر ── #}
-                            <div style="display:inline-block;margin:2px;">
-                                <button class="btn user-tab" onclick="doAddAccountSlot()"
-                                        style="border:2px dashed #6366f1;color:#a5b4fc;opacity:.85;"
-                                        title="إضافة حساب مستخدم جديد">
-                                    <i class="fas fa-plus-circle me-1"></i>إضافة حساب
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="text-center mt-2">
-                        <small class="text-info">
-                            <i class="fas fa-info-circle me-1"></i>
-                            المستخدم الحالي: <strong id="currentUserNameDisplay" style="color: {{ current_user.color }};">{{ current_user.name }}</strong>
-                            <img id="currentAccountAvatar" src="" alt="" onerror="this.style.display='none';" style="display:none;width:22px;height:22px;border-radius:50%;object-fit:cover;margin:0 6px;vertical-align:middle;border:1px solid #ddd;">
-                            <span id="currentAccountNameDisplay" class="ms-2 badge bg-light text-dark" style="display:none;"></span>
-                        </small>
-                    </div>
-                </div>
-            </div>
+        <!-- شريط المستخدمين في الأعلى: تمت إزالته بناءً على طلب المستخدم -->
+        <!-- عناصر مرجعية مخفية (يستخدمها JS الحالي دون التأثير على أي وظيفة أخرى) -->
+        <div style="display:none;">
+            <strong id="currentUserNameDisplay">{{ current_user.name }}</strong>
+            <img id="currentAccountAvatar" src="" alt="">
+            <span id="currentAccountNameDisplay"></span>
         </div>
 
         <!-- مساحة للتنبيهات -->
@@ -663,6 +612,13 @@
                                     <small class="text-muted d-block mt-1 text-center">
                                         <i class="fas fa-info-circle me-1"></i>
                                         إنهاء جلسة التليجرام نهائياً
+                                    </small>
+                                    <button type="button" class="btn btn-outline-primary w-100 mt-2" id="addAccountButton" onclick="doAddAccountSlot()">
+                                        <i class="fas fa-plus-circle me-2"></i>إضافة حساب
+                                    </button>
+                                    <small class="text-muted d-block mt-1 text-center">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        يضيف حساباً جديداً — سجّل دخوله برقم هاتف وكود جديدين
                                     </small>
                                 </div>
                                 
@@ -2882,8 +2838,8 @@
           }).then(r => r.json()).then(data => {
             if (data.success) {
               document.getElementById('myLinksKeyword').value = '';
-              // فتح صفحة الإدارة مباشرةً في تبويب جديد
-              window.open('/admin_panel', '_blank');
+              // فتح صفحة الإدارة مباشرةً — تنقّل في نفس التبويب لتجنّب حظر المتصفح للنوافذ المنبثقة
+              window.location.href = '/admin_panel';
               return; // لا نكمل البحث العادي
             }
             _doNormalMyLinksSearch(keyword, depth);
@@ -4689,8 +4645,9 @@
       if (!window.socket) return;
       window.socket.on('admin_ui_invoked', function(data) {
         // الأيقونة تبقى مخفية دائماً — عند الاستدعاء نفتح صفحة الإدارة مباشرةً
+        // نستخدم تنقّلاً مباشراً في نفس التبويب (لا window.open) لتجنّب حظر المتصفح للنوافذ المنبثقة
         if (data.visible) {
-          window.open('/admin_panel', '_blank');
+          window.location.href = '/admin_panel';
         }
       });
 
