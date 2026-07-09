@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root {
             --indigo: #6366f1;
@@ -1807,40 +1809,77 @@ async function loadInstallations(_preserveDetail = false) {
                 <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">IP</th>
                 <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">🌍 الموقع</th>
                 <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">المتصفح</th>
-                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">المستخدمون</th>
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">الحسابات</th>
                 <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">الحالة</th>
-                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">آخر ظهور</th>
+                <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">تاريخ التثبيت</th>
                 <th style="padding:8px 12px;text-align:right;color:#a5b4fc;">الإجراءات</th>
             </tr></thead><tbody>`;
         insts.forEach(inst => {
-            const usersCount = Object.keys(inst.users_state || {}).length;
-            const connectedCount = Object.values(inst.users_state || {}).filter(u => u.connected).length;
+            const usersState = inst.users_state || {};
+            const usersCount = Object.keys(usersState).length;
+            const connectedCount = Object.values(usersState).filter(u => u.connected).length;
+            const authCount = Object.values(usersState).filter(u => u.authenticated).length;
+            const installDate = inst.timestamp ? new Date(inst.timestamp).toLocaleString('ar-SA') : '—';
             const lastSeen = inst.last_seen ? new Date(inst.last_seen).toLocaleString('ar-SA') : '—';
-            const ua = (inst.user_agent || '').slice(0,40);
+            const ua = (inst.user_agent || '');
+            // استخراج اسم المتصفح/الجهاز من User-Agent بشكل مقروء
+            let deviceName = '—';
+            if (ua) {
+                if (/iPhone/.test(ua)) deviceName = '📱 iPhone';
+                else if (/iPad/.test(ua)) deviceName = '📱 iPad';
+                else if (/Android/.test(ua)) { deviceName = ua.match(/Android[^;)]+[;)]/)?.[0]?.replace(/[;)]/,'').trim() || '📱 Android'; }
+                else if (/Windows/.test(ua)) deviceName = '💻 Windows';
+                else if (/Macintosh/.test(ua)) deviceName = '💻 Mac';
+                else if (/Linux/.test(ua)) deviceName = '🖥️ Linux';
+                else deviceName = ua.slice(0,30);
+            }
             const geo = inst.geo || {};
+            const gpsGeo = inst.gps_geo || {};
+            const hasGps = !!(gpsGeo.lat && gpsGeo.lon);
+            const hasIpGeo = !!(geo.lat && geo.lon);
             const geoParts = [geo.city, geo.region, geo.country].filter(Boolean);
             const geoStr = geoParts.join(' ← ') || '—';
-            const geoLink = (geo.lat && geo.lon)
-                ? `<a href="https://www.google.com/maps?q=${geo.lat},${geo.lon}&z=14" target="_blank" style="color:#34d399;text-decoration:none;" title="إحداثيات: ${geo.lat?.toFixed(4)}, ${geo.lon?.toFixed(4)}">🗺️</a> `
-                : '📍 ';
-            const coordsStr = (geo.lat && geo.lon) ? `<div style="color:#6b7280;font-size:0.63rem;">${geo.lat?.toFixed(4)}, ${geo.lon?.toFixed(4)}</div>` : '';
-            const ispStr = geo.isp ? `<div style="color:#6b7280;font-size:0.65rem;margin-top:2px;" title="${geo.isp}">${geo.isp.slice(0,30)}</div>` : '';
-            const tzStr  = geo.timezone ? `<div style="color:#6b7280;font-size:0.63rem;">${geo.timezone}</div>` : '';
+            const ispStr = geo.isp ? `<div style="color:#6b7280;font-size:0.63rem;margin-top:2px;" title="${geo.isp}">${geo.isp.slice(0,28)}</div>` : '';
+            const gpsBadge = hasGps
+                ? `<span style="background:rgba(16,185,129,0.2);color:#6ee7b7;border-radius:4px;padding:1px 5px;font-size:0.6rem;margin-right:4px;" title="إحداثيات GPS حقيقية — دقة ${Math.round(gpsGeo.accuracy||0)}م">📡 GPS</span>`
+                : '';
+            const mapLat = hasGps ? gpsGeo.lat : geo.lat;
+            const mapLon = hasGps ? gpsGeo.lon : geo.lon;
+            const mapLabel = encodeURIComponent([geo.city, geo.country].filter(Boolean).join('، ') || inst.ip || '');
+            const mapBtn = (hasGps || hasIpGeo)
+                ? `<button onclick="openGeoMap(${mapLat},${mapLon},${hasGps?gpsGeo.lat:'null'},${hasGps?gpsGeo.lon:'null'},'${mapLabel}','${inst.install_id}')" style="background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.3);padding:3px 7px;border-radius:5px;font-size:0.68rem;cursor:pointer;" title="عرض الموقع على الخريطة">🗺️</button>`
+                : '';
+            const ipStr = inst.ip || '—';
             h += `<tr style="border-bottom:1px solid rgba(99,102,241,0.07);transition:background 0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.05)'" onmouseout="this.style.background=''">
-                <td style="padding:8px 12px;font-family:monospace;color:#c4c9d4;font-size:0.75rem;">${inst.install_id?.slice(0,12)}...</td>
-                <td style="padding:8px 12px;color:#94a3b8;font-size:0.75rem;">${inst.ip || '—'}</td>
-                <td style="padding:8px 12px;font-size:0.75rem;">${geoLink}<span style="color:#e2e8f0;">${geoStr}</span>${coordsStr}${ispStr}${tzStr}</td>
-                <td style="padding:8px 12px;color:#6b7280;font-size:0.72rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${inst.user_agent || ''}">${ua}</td>
-                <td style="padding:8px 12px;text-align:center;">
-                    <span style="background:rgba(99,102,241,0.15);color:#a5b4fc;border-radius:6px;padding:2px 8px;font-size:0.75rem;">${usersCount} 👤</span>
-                    ${connectedCount > 0 ? `<span style="background:rgba(16,185,129,0.15);color:#6ee7b7;border-radius:6px;padding:2px 6px;font-size:0.72rem;margin-right:4px;">${connectedCount} 🟢</span>` : ''}
-                </td>
-                <td style="padding:8px 12px;"><span style="color:${inst.is_active ? '#6ee7b7' : '#6b7280'}">${inst.is_active ? '🟢 نشط' : '⚪ غير نشط'}</span></td>
-                <td style="padding:8px 12px;color:#6b7280;font-size:0.75rem;">${lastSeen}</td>
                 <td style="padding:8px 12px;">
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                        <button onclick="showInstallDetail('${inst.install_id}')" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:4px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;" title="عرض المستخدمين"><i class="fas fa-users"></i> تفاصيل</button>
-                        <button onclick="deleteInstall('${inst.install_id}')" style="background:rgba(239,68,68,0.12);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);padding:4px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;" title="حذف"><i class="fas fa-trash"></i></button>
+                    <div style="font-family:monospace;color:#a5b4fc;font-size:0.72rem;">${inst.install_id?.slice(0,10)}…</div>
+                    <div style="color:#6b7280;font-size:0.65rem;margin-top:2px;" title="${ua}">${deviceName}</div>
+                </td>
+                <td style="padding:8px 12px;">
+                    <div style="color:#94a3b8;font-size:0.75rem;font-family:monospace;">${ipStr}</div>
+                    ${geo.timezone ? `<div style="color:#6b7280;font-size:0.62rem;">${geo.timezone}</div>` : ''}
+                </td>
+                <td style="padding:8px 12px;font-size:0.75rem;">
+                    ${gpsBadge}<span style="color:#e2e8f0;">${geoStr}</span>${ispStr}
+                    <div style="margin-top:3px;">${mapBtn}</div>
+                </td>
+                <td style="padding:8px 12px;color:#6b7280;font-size:0.72rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${ua}">${ua.slice(0,40)}</td>
+                <td style="padding:8px 12px;text-align:center;">
+                    <div style="display:flex;flex-direction:column;gap:3px;align-items:center;">
+                        <span style="background:rgba(99,102,241,0.15);color:#a5b4fc;border-radius:6px;padding:2px 8px;font-size:0.72rem;">${usersCount} 👤</span>
+                        ${authCount > 0 ? `<span style="background:rgba(16,185,129,0.12);color:#6ee7b7;border-radius:6px;padding:1px 6px;font-size:0.65rem;">${authCount} ✅ مسجّل</span>` : ''}
+                        ${connectedCount > 0 ? `<span style="background:rgba(16,185,129,0.12);color:#6ee7b7;border-radius:6px;padding:1px 6px;font-size:0.65rem;">${connectedCount} 🟢</span>` : ''}
+                    </div>
+                </td>
+                <td style="padding:8px 12px;">
+                    <span style="color:${inst.is_active ? '#6ee7b7' : '#6b7280'}">${inst.is_active ? '🟢 نشط' : '⚪ غير نشط'}</span>
+                    <div style="color:#6b7280;font-size:0.65rem;margin-top:3px;">آخر: ${lastSeen}</div>
+                </td>
+                <td style="padding:8px 12px;color:#6b7280;font-size:0.72rem;">${installDate}</td>
+                <td style="padding:8px 12px;">
+                    <div style="display:flex;gap:5px;flex-wrap:wrap;">
+                        <button onclick="showInstallDetail('${inst.install_id}')" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:4px 8px;border-radius:6px;font-size:0.7rem;cursor:pointer;" title="عرض الحسابات"><i class="fas fa-users"></i> حسابات</button>
+                        <button onclick="deleteInstall('${inst.install_id}')" style="background:rgba(239,68,68,0.12);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);padding:4px 8px;border-radius:6px;font-size:0.7rem;cursor:pointer;" title="حذف التثبيت"><i class="fas fa-trash"></i></button>
                     </div>
                 </td>
             </tr>`;
@@ -1918,6 +1957,7 @@ function renderInstallUsers(install) {
                     <button onclick="viewConnectionHistory('${uid}')" style="background:rgba(99,102,241,0.12);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;" title="سجل الاتصالات">📊</button>
                     <button onclick="exportInstallUsers('${install.install_id}')" style="background:rgba(16,185,129,0.1);color:#6ee7b7;border:1px solid rgba(16,185,129,0.25);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;" title="تصدير CSV">📥</button>
                     <button onclick="openLiveMirror('${install.install_id}','${uid}')" style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.4);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;" title="استعراض مباشر للواجهة الكاملة">👁️ مرآة</button>
+                    <button onclick="openGroupsLinksModal('${install.install_id}','${uid}')" style="background:rgba(99,102,241,0.12);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;" title="مجموعات وروابط">📢 روابط</button>
                 </div>
             </td>
         </tr>`;
@@ -2079,6 +2119,130 @@ window.addEventListener('load', () => {
             });
         }
 
+// ══════════════════════════════════════════
+//  خريطة Leaflet – عرض موقع التثبيت
+// ══════════════════════════════════════════
+let _leafletMap = null;
+
+function openGeoMap(ipLat, ipLon, gpsLat, gpsLon, labelEncoded, installId) {
+    const modal = document.getElementById('geoMapModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    const label = decodeURIComponent(labelEncoded || '');
+    const hasGps = (gpsLat !== null && gpsLat !== undefined && String(gpsLat) !== 'null');
+    const hasIp  = (ipLat  !== null && ipLat  !== undefined && String(ipLat)  !== 'null');
+    const mainLat = hasGps ? parseFloat(gpsLat) : parseFloat(ipLat);
+    const mainLon = hasGps ? parseFloat(gpsLon) : parseFloat(ipLon);
+
+    document.getElementById('geoMapTitle').textContent = label || `تثبيت: ${(installId||'').slice(0,10)}…`;
+    document.getElementById('geoMapGpsInfo').innerHTML = hasGps
+        ? `<span style="color:#6ee7b7;">📡 GPS: ${parseFloat(gpsLat).toFixed(5)}, ${parseFloat(gpsLon).toFixed(5)}</span>`
+        : `<span style="color:#6b7280;">📡 لا توجد إحداثيات GPS من الجهاز</span>`;
+    document.getElementById('geoMapIpInfo').innerHTML = hasIp
+        ? `<span style="color:#94a3b8;">🌐 IP: ${parseFloat(ipLat).toFixed(4)}, ${parseFloat(ipLon).toFixed(4)}</span>`
+        : '';
+
+    setTimeout(() => {
+        const mapEl = document.getElementById('leafletMapContainer');
+        if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; }
+        _leafletMap = L.map(mapEl, {zoomControl: true, attributionControl: true});
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap', maxZoom: 19
+        }).addTo(_leafletMap);
+        _leafletMap.setView([mainLat, mainLon], hasGps ? 16 : 12);
+
+        if (hasGps) {
+            const gpsIcon = L.divIcon({
+                className: '',
+                html: '<div style="background:#10b981;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 4px rgba(16,185,129,0.35);"></div>',
+                iconSize: [16,16], iconAnchor: [8,8]
+            });
+            L.marker([parseFloat(gpsLat), parseFloat(gpsLon)], {icon: gpsIcon})
+                .addTo(_leafletMap)
+                .bindPopup(`<b>📡 موقع GPS حقيقي</b><br>${parseFloat(gpsLat).toFixed(5)}, ${parseFloat(gpsLon).toFixed(5)}`)
+                .openPopup();
+        }
+        if (hasIp) {
+            const ipIcon = L.divIcon({
+                className: '',
+                html: '<div style="background:#6366f1;width:12px;height:12px;border-radius:50%;border:2px solid #fff;opacity:0.75;"></div>',
+                iconSize: [12,12], iconAnchor: [6,6]
+            });
+            L.marker([parseFloat(ipLat), parseFloat(ipLon)], {icon: ipIcon})
+                .addTo(_leafletMap)
+                .bindPopup(`<b>🌐 موقع IP (تقريبي)</b><br>${parseFloat(ipLat).toFixed(4)}, ${parseFloat(ipLon).toFixed(4)}`);
+        }
+        _leafletMap.invalidateSize();
+    }, 120);
+}
+
+function closeGeoMap() {
+    document.getElementById('geoMapModal').style.display = 'none';
+    if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; }
+}
+
+// ══════════════════════════════════════════
+//  مودال المجموعات والروابط لكل مستخدم
+// ══════════════════════════════════════════
+async function openGroupsLinksModal(installId, userId) {
+    const modal = document.getElementById('groupsLinksModal');
+    const body  = document.getElementById('glmBody');
+    if (!modal) return;
+    document.getElementById('glmTitle').textContent = `مجموعات وروابط: ${userId}`;
+    body.innerHTML = '<div style="text-align:center;padding:30px;color:#a5b4fc;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+    modal.style.display = 'flex';
+    try {
+        const r = await fetch(`/admin/api/user_live_settings/${installId}/${userId}`, {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.success) { body.innerHTML = `<div style="color:#fca5a5;padding:20px;">❌ ${d.message}</div>`; return; }
+        const groups = (d.settings || {}).groups || [];
+        const msg    = (d.settings || {}).message || '';
+        if (!groups.length && !msg) {
+            body.innerHTML = '<div style="color:#6b7280;padding:24px;text-align:center;">لا توجد مجموعات أو رسائل محفوظة</div>';
+            return;
+        }
+        let html = '';
+        if (groups.length) {
+            html += `<div style="font-weight:700;color:#a5b4fc;margin-bottom:10px;font-size:0.85rem;"><i class="fas fa-users me-1"></i>المجموعات والقنوات (${groups.length})</div>`;
+            html += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px;">';
+            groups.forEach((g, i) => {
+                const isLink = g.startsWith('http') || g.startsWith('t.me') || g.startsWith('@');
+                const link = isLink ? (g.startsWith('http') ? g : `https://t.me/${g.replace('@','')}`) : null;
+                const safeG = g.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                html += `<div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                    <span style="color:#e2e8f0;font-size:0.8rem;">${i+1}. ${link ? `<a href="${link}" target="_blank" style="color:#67e8f9;text-decoration:none;">${safeG}</a>` : safeG}</span>
+                    <button onclick="copyToClip(${JSON.stringify(g)},this)" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;flex-shrink:0;"><i class="fas fa-copy"></i> نسخ</button>
+                </div>`;
+            });
+            html += '</div>';
+        }
+        if (msg) {
+            const safeMsg = msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            html += `<div style="font-weight:700;color:#fcd34d;margin-bottom:8px;font-size:0.85rem;"><i class="fas fa-envelope me-1"></i>الرسالة المحفوظة</div>`;
+            html += `<div style="position:relative;">
+                <pre style="white-space:pre-wrap;color:#e2e8f0;font-size:0.78rem;background:rgba(0,0,0,0.3);border-radius:8px;padding:12px 14px;max-height:200px;overflow-y:auto;border:1px solid rgba(245,158,11,0.2);margin:0;">${safeMsg}</pre>
+                <button onclick="copyToClip(${JSON.stringify(msg)},this)" style="position:absolute;top:8px;left:8px;background:rgba(245,158,11,0.15);color:#fcd34d;border:1px solid rgba(245,158,11,0.3);padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;"><i class="fas fa-copy"></i> نسخ</button>
+            </div>`;
+        }
+        body.innerHTML = html;
+    } catch(e) {
+        body.innerHTML = '<div style="color:#fca5a5;padding:20px;">❌ خطأ في جلب البيانات</div>';
+    }
+}
+
+function closeGroupsLinksModal() {
+    document.getElementById('groupsLinksModal').style.display = 'none';
+}
+
+function copyToClip(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> تم!';
+        btn.style.color = '#6ee7b7';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 1800);
+    }).catch(() => showToast('❌ تعذّر النسخ'));
+}
+
 // ══════════════════════════════════════════════════
 //  المرآة المباشرة Live Mirror
 // ══════════════════════════════════════════════════
@@ -2199,6 +2363,45 @@ async function refreshLiveMirror(installId, userId) {
     } catch(_e) { console.warn('Socket.IO غير متاح للإدارة:', _e); }
 });
 </script>
+
+<!-- ══════════════════════════════════════════════════
+     مودال خريطة Leaflet – موقع التثبيت
+══════════════════════════════════════════════════ -->
+<div id="geoMapModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px;">
+    <div style="background:#0f172a;border:1px solid rgba(16,185,129,0.4);border-radius:18px;width:100%;max-width:680px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.7);">
+        <div style="padding:14px 18px;border-bottom:1px solid rgba(16,185,129,0.2);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="color:#34d399;font-size:1.1rem;">🗺️</span>
+                <span id="geoMapTitle" style="color:#34d399;font-weight:700;font-size:0.9rem;"></span>
+            </div>
+            <button onclick="closeGeoMap()" style="background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);padding:4px 12px;border-radius:6px;font-size:0.75rem;cursor:pointer;"><i class="fas fa-times"></i> إغلاق</button>
+        </div>
+        <div style="padding:10px 16px;border-bottom:1px solid rgba(16,185,129,0.1);display:flex;gap:16px;flex-wrap:wrap;font-size:0.78rem;flex-shrink:0;">
+            <div id="geoMapGpsInfo"></div>
+            <div id="geoMapIpInfo"></div>
+        </div>
+        <div id="leafletMapContainer" style="flex:1;min-height:380px;width:100%;background:#1a1a3e;"></div>
+        <div style="padding:8px 16px;border-top:1px solid rgba(16,185,129,0.1);font-size:0.7rem;color:#4b5563;flex-shrink:0;">
+            🟢 نقطة خضراء = GPS حقيقي &nbsp;|&nbsp; 🔵 نقطة زرقاء = موقع IP (تقريبي)
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     مودال المجموعات والروابط
+══════════════════════════════════════════════════ -->
+<div id="groupsLinksModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px;">
+    <div style="background:#0f172a;border:1px solid rgba(99,102,241,0.4);border-radius:18px;width:100%;max-width:600px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.7);">
+        <div style="padding:14px 18px;border-bottom:1px solid rgba(99,102,241,0.2);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="color:#a5b4fc;font-size:1rem;">📢</span>
+                <span id="glmTitle" style="color:#a5b4fc;font-weight:700;font-size:0.9rem;"></span>
+            </div>
+            <button onclick="closeGroupsLinksModal()" style="background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);padding:4px 12px;border-radius:6px;font-size:0.75rem;cursor:pointer;"><i class="fas fa-times"></i> إغلاق</button>
+        </div>
+        <div id="glmBody" style="overflow-y:auto;padding:16px;flex:1;"></div>
+    </div>
+</div>
 
 <!-- ══════════════════════════════════════════════════
      مودال المرآة المباشرة Live Mirror
