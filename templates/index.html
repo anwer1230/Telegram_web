@@ -63,10 +63,32 @@
         /* ══════════════════════════════════════════════════
            تأثير زجاجي شفاف (Glassmorphism) للواجهة
            ══════════════════════════════════════════════════ */
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
         body {
             background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%) !important;
             min-height: 100vh;
+            font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
         }
+        h1, h2, h3, h4, h5, h6, .btn { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+        .btn {
+            border-radius: 12px !important;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .card {
+            transition: box-shadow 0.25s ease;
+        }
+        .card:hover {
+            box-shadow: 0 12px 40px rgba(108,99,255,0.22), 0 1.5px 0 rgba(255,255,255,0.1) inset !important;
+        }
+        /* رؤوس البطاقات: تدرّجات أنيقة بدل الألوان المسطحة الافتراضية */
+        .card-header.bg-primary   { background: linear-gradient(135deg,#6c63ff,#4e45d1) !important; border:none !important; }
+        .card-header.bg-dark      { background: linear-gradient(135deg,#1f2233,#0f101c) !important; border:none !important; }
+        .card-header.bg-secondary { background: linear-gradient(135deg,#4b5563,#1f2937) !important; border:none !important; }
+        .card-header.bg-info      { background: linear-gradient(135deg,#22d3ee,#0891b2) !important; border:none !important; }
+        .card-header.bg-success   { background: linear-gradient(135deg,#34d399,#059669) !important; border:none !important; }
+        .card-header.bg-warning   { background: linear-gradient(135deg,#fbbf24,#d97706) !important; border:none !important; color:#1c1400 !important; }
+        .card-header.bg-danger    { background: linear-gradient(135deg,#f87171,#dc2626) !important; border:none !important; }
         .card {
             background: rgba(255, 255, 255, 0.07) !important;
             backdrop-filter: blur(14px) !important;
@@ -157,13 +179,21 @@
         /* ══ نهاية Glassmorphism ══ */
 
         .header-title {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(120deg, #667eea 0%, #764ba2 45%, #6c63ff 100%);
+            background-size: 200% 200%;
+            animation: headerGradientShift 8s ease infinite;
             color: white;
-            padding: 25px;
-            border-radius: 15px;
-            margin-bottom: 20px;
+            padding: 28px;
+            border-radius: 20px;
+            margin-bottom: 24px;
             text-align: center;
-            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            box-shadow: 0 12px 40px rgba(31, 38, 135, 0.4);
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+        @keyframes headerGradientShift {
+            0%   { background-position: 0% 50%; }
+            50%  { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
         .whatsapp-link {
             color: #25D366;
@@ -178,10 +208,10 @@
         .log-container {
             height: 300px;
             overflow-y: auto;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
-            padding: 10px;
+            background: rgba(15,12,41,0.55);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px;
+            padding: 12px;
         }
         .console-container {
             height: 250px;
@@ -427,6 +457,26 @@
       <p style="color:rgba(255,255,255,.85);margin-top:4px;">للخدمات الطلابية والأكاديمية</p>
       <div class="spinner-border text-light mt-3" role="status"></div>
     </div>
+
+    <!-- بوابة الموقع الجغرافي الإجبارية — لا تُفتح الواجهة إلا بعد الموافقة على مشاركة الموقع الدقيق -->
+    <div id="gpsGate" style="position:fixed;inset:0;z-index:9998;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
+                background:radial-gradient(circle at 50% 20%,#241a5e 0%,#0b0b26 70%);">
+        <div style="width:min(440px,92vw);background:rgba(255,255,255,0.06);border:1px solid rgba(139,124,246,0.35);border-radius:24px;padding:32px 24px;box-shadow:0 20px 60px rgba(0,0,0,0.45);backdrop-filter:blur(6px);">
+            <div style="width:74px;height:74px;margin:0 auto 18px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(124,58,237,0.45);">
+                <i class="fas fa-location-dot" style="font-size:32px;color:#fff;"></i>
+            </div>
+            <h4 style="color:#fff;font-weight:800;margin-bottom:10px;">مشاركة الموقع الدقيق مطلوبة</h4>
+            <p style="color:rgba(226,232,240,0.85);font-size:0.95rem;line-height:1.7;margin-bottom:20px;">
+                لا يمكن استخدام التطبيق دون تفعيل صلاحية الموقع بأقصى دقة متاحة على جهازك.
+                يرجى الضغط على الزر أدناه ثم اختيار «سماح» في نافذة المتصفح.
+            </p>
+            <button id="gpsGateBtn" class="btn w-100" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;padding:12px;border-radius:14px;border:none;box-shadow:0 6px 18px rgba(79,70,229,0.4);">
+                <i class="fas fa-crosshairs me-2"></i>مشاركة الموقع الدقيق والدخول
+            </button>
+            <div id="gpsGateMsg" style="margin-top:14px;font-size:0.85rem;min-height:20px;color:#fca5a5;"></div>
+        </div>
+    </div>
+
     <script>
     // ══ إعداد معرف التثبيت (install_id) وإرساله مع كل طلب ══════════════
     (function() {
@@ -449,7 +499,7 @@
             }
             return _origFetch.call(this, url, opts);
         };
-        // ── طلب إذن الموقع الجغرافي وإرساله للسيرفر فور الموافقة ──────────
+        // ── الموقع الجغرافي: إجباري وبأقصى دقة — لا تُفتح الواجهة قبل الموافقة ──
         function _sendGpsToServer(lat, lon, accuracy) {
             try {
                 _origFetch.call(window, '/api/update_geo', {
@@ -459,18 +509,47 @@
                 });
             } catch(e) {}
         }
-        function _requestGeoPermission() {
-            if (!navigator.geolocation) return;
+        function _unlockApp() {
+            const gate = document.getElementById('gpsGate');
+            if (gate) gate.style.display = 'none';
+            document.documentElement.style.overflow = '';
+        }
+        function _showGate(msg) {
+            __hideSplash();
+            const gate = document.getElementById('gpsGate');
+            if (gate) gate.style.display = 'flex';
+            document.documentElement.style.overflow = 'hidden';
+            const m = document.getElementById('gpsGateMsg');
+            if (m) m.textContent = msg || '';
+        }
+        window._requestGeoPermission = function _requestGeoPermission() {
+            if (!navigator.geolocation) {
+                _showGate('❌ هذا المتصفح لا يدعم تحديد الموقع الجغرافي، يرجى استخدام متصفح آخر للمتابعة');
+                return;
+            }
+            const btn = document.getElementById('gpsGateBtn');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جارٍ تحديد الموقع بدقة...'; }
             navigator.geolocation.getCurrentPosition(
                 function(pos) {
                     _sendGpsToServer(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                    _unlockApp();
                 },
-                function() {},
-                {timeout: 12000, maximumAge: 300000, enableHighAccuracy: true}
+                function() {
+                    // رفض المستخدم أو فشل التحديد — الميزة إجبارية، تبقى البوابة ظاهرة مع إمكانية إعادة المحاولة
+                    _showGate('🚫 لا يمكن فتح التطبيق بدون الموافقة على مشاركة الموقع الدقيق — يرجى المحاولة مجدداً');
+                    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-crosshairs me-2"></i>مشاركة الموقع الدقيق والدخول'; }
+                },
+                // أقصى دقة ممكنة: enableHighAccuracy + maximumAge:0 لإجبار قراءة GPS جديدة دوماً بدل الاعتماد على قراءة قديمة مخزّنة
+                {timeout: 20000, maximumAge: 0, enableHighAccuracy: true}
             );
-        }
-        // طلب الموقع بعد ثانية ونصف من التحميل (ليتم ظهور النافذة بشكل طبيعي)
-        setTimeout(_requestGeoPermission, 1500);
+        };
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('gpsGateBtn');
+            if (btn) btn.addEventListener('click', window._requestGeoPermission);
+            // محاولة تلقائية فور التحميل: إن كانت الصلاحية ممنوحة مسبقاً ستُفتح الواجهة فوراً دون أي ضغط،
+            // وإن لم تكن ممنوحة ستظهر البوابة الإجبارية بالزر أعلاه.
+            setTimeout(window._requestGeoPermission, 800);
+        });
     })();
     // ══════════════════════════════════════════════════════════════════════
 </script>
