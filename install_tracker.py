@@ -118,8 +118,10 @@ def track_installation(user_id, request, predefined_users, users_dict,
     - إذا كان المعرف موجوداً مسبقاً: تحديث آخر ظهور وحالة المستخدمين فقط (عزل تام، بدون تكرار).
     - إذا لم يكن موجوداً: إنشاء تثبيت جديد وبث إشعار فوري عبر Socket.IO.
     """
-    if not user_id or user_id not in predefined_users:
-        return None
+    # إذا كان user_id غير موجود في predefined_users (مثلاً قبل تسجيل الدخول أو بعد تغيير النظام الديناميكي)
+    # نستمر في التتبع بدون users_state فقط لتسجيل بصمة الجهاز
+    if not user_id:
+        return None, False, None
 
     # قراءة المعرف بالأولوية: هيدر X-Install-ID → كوكيز → IP+UA كبديل ثابت → UUID جديد
     install_id = request.headers.get('X-Install-ID')
