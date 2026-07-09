@@ -193,7 +193,7 @@ def track_installation(user_id, request, predefined_users, users_dict,
                 socketio_obj.emit('new_installation', {
                     "install_id": install_id,
                     "user_id": user_id,
-                    "user_name": predefined_users[user_id].get("name", user_id),
+                    "user_name": predefined_users.get(user_id, {}).get("name", user_id),
                     "ip": ip,
                     "user_agent": ua[:80],
                     "timestamp": timestamp,
