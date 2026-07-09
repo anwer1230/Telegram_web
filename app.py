@@ -648,6 +648,17 @@ def send_push_notification(user_id, title, body, data=None):
         logger.warning(f"Push notification failed for {user_id}: {_ex}")
         return False
 
+def allocate_new_visitor_slot():
+    """يولّد معرّف فتحة مؤقتة جديدة تماماً لزائر جديد لا يملك جلسة بعد.
+    لا يجوز أبداً إعادة استخدام معرّف حساب موجود مسبقاً هنا، لأن ذلك يعني
+    منح الزائر الجديد بيانات/جلسة تيليجرام تخص حساباً آخر بالفعل."""
+    existing = set(PREDEFINED_USERS.keys()) | set(USERS.keys())
+    n = 1
+    while f"user_{n}" in existing:
+        n += 1
+    return f"user_{n}"
+
+
 def get_user_session_dir(user_id):
     """مجلد منفصل لكل مستخدم لعزل البيانات والإعدادات"""
     user_dir = os.path.join(SESSIONS_DIR, str(user_id))
@@ -3804,16 +3815,14 @@ def execute_scheduled_messages(user_id, settings):
 def handle_connect():
     try:
         if 'user_id' not in session:
-            session['user_id'] = "user_1"
+            # زائر جديد بلا جلسة — يحصل على فتحة مؤقتة فريدة، لا معرّف حساب موجود مسبقاً
+            session['user_id'] = allocate_new_visitor_slot()
             session.permanent = True
 
         user_id = session['user_id']
-
-        if user_id not in PREDEFINED_USERS:
-            if PREDEFINED_USERS:
-                user_id = list(PREDEFINED_USERS.keys())[0]
-                session['user_id'] = user_id
-            # else: user_id is a temp slot (not yet in PREDEFINED_USERS), keep it
+        # ملاحظة: لا نعيد تعيين user_id إلى أول حساب في PREDEFINED_USERS عند عدم
+        # وجوده هناك — ذلك كان يسرّب حساب أول مستخدم لكل زائر جديد. نُبقي الفتحة
+        # المؤقتة كما هي حتى يسجّل هذا الزائر دخوله بنفسه.
 
         join_room(user_id)
         _uname = PREDEFINED_USERS.get(user_id, {}).get('name', user_id)
@@ -3974,10 +3983,10 @@ def index():
         pass
     # ────────────────────────────────────────────────────────────
     if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
-        if PREDEFINED_USERS:
-            session['user_id'] = list(PREDEFINED_USERS.keys())[0]
-        else:
-            session['user_id'] = "user_1"  # فتحة مؤقتة لأول حساب
+        # مهم: لا نُسند أبداً معرّف حساب موجود مسبقاً (مثل أول حساب في PREDEFINED_USERS)
+        # لزائر جديد ليس لديه جلسة — وإلا يرى بيانات وجلسة تيليجرام حساب شخص آخر بالكامل.
+        # كل زائر جديد يحصل على فتحة مؤقتة فريدة خاصة به فقط.
+        session['user_id'] = allocate_new_visitor_slot()
         session.permanent = True
 
     user_id = session['user_id']
@@ -4287,7 +4296,10 @@ def api_save_login():
         session['user_id'] = requested_uid
         session.permanent = True
     elif 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
-        session['user_id'] = "user_1"
+        # لا نُسند معرّف "user_1" الثابت هنا لأنه قد يكون حساباً حقيقياً موجوداً مسبقاً —
+        # نفس فتحة الجلسة الحالية إن وُجدت (فتحة مؤقتة جديدة)، وإلا فتحة جديدة تماماً.
+        if 'user_id' not in session or session['user_id'] in PREDEFINED_USERS:
+            session['user_id'] = allocate_new_visitor_slot()
         session.permanent = True
     session.modified = True
 
