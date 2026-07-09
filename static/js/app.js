@@ -739,10 +739,27 @@ function initSocket() {
   socket.on('login_status', d => {
     if (d.logged_in) {
       updateLoggedInUI(true);
-    } else if (!d.awaiting_code && !d.awaiting_password) {
+    } else if (d.awaiting_code) {
+      const verifyForm = document.getElementById('verifyForm');
+      const passwordForm = document.getElementById('passwordForm');
+      const loginBtn = document.getElementById('loginBtn');
+      if (verifyForm) verifyForm.style.display = 'block';
+      if (passwordForm) passwordForm.style.display = 'none';
+      if (loginBtn) setLoading(loginBtn, false, '<i class="fas fa-sign-in-alt me-2"></i>تسجيل الدخول');
+      const vc = document.getElementById('verificationCode');
+      if (vc) vc.focus();
+    } else if (d.awaiting_password) {
+      const verifyForm = document.getElementById('verifyForm');
+      const passwordForm = document.getElementById('passwordForm');
+      const loginBtn = document.getElementById('loginBtn');
+      if (verifyForm) verifyForm.style.display = 'none';
+      if (passwordForm) passwordForm.style.display = 'block';
+      if (loginBtn) setLoading(loginBtn, false, '<i class="fas fa-sign-in-alt me-2"></i>تسجيل الدخول');
+      const pw = document.getElementById('twoFactorPassword');
+      if (pw) pw.focus();
+    } else if (!d.logged_in) {
       updateLoggedInUI(false);
     }
-    // إذا كان في انتظار كود أو كلمة مرور — لا نغير الواجهة (سيتولى HTTP handler ذلك)
   });
   socket.on('update_monitoring_buttons', d => {
     const startBtn = document.getElementById('startMonitoringBtn');
