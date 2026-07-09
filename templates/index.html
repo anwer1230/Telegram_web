@@ -1121,7 +1121,7 @@
 
         <!-- سجل العمليات -->
         <div class="row">
-            <div class="col-lg-6 mb-4">
+            <div class="col-lg-12 mb-4">
                 <div class="card">
                     <div class="card-header bg-dark text-white">
                         <h5 class="mb-0">
@@ -1135,20 +1135,8 @@
                 </div>
             </div>
 
-            <!-- وحدة التحكم -->
-            <div class="col-lg-6 mb-4">
-                <div class="card">
-                    <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0">
-                            <i class="fas fa-terminal me-2"></i>
-                            وحدة التحكم
-                        </h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div id="consoleLog" class="console-container"></div>
-                    </div>
-                </div>
-            </div>
+            <!-- وحدة التحكم: تمت إزالتها من الواجهة بناءً على طلب المستخدم -->
+            <div id="consoleLog" style="display:none;"></div>
         </div>
     </div>
 
@@ -8385,13 +8373,17 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     // --- عرض رسالة الحالة ---
+    // الإشعارات ميزة صامتة تُفعَّل تلقائياً في الخلفية — أخطاؤها (مثل SW timeout) لا تُعرض
+    // للمستخدم كرسالة حمراء مخيفة أثناء تسجيل الدخول، فقط تُسجَّل في الكونسول للمطوّر.
     function showPushStatus(msg, type) {
+        console.debug('[push]', msg);
+        if (type !== 'success' && type !== 'info') return;
         const el = document.getElementById('pushStatusMsg');
         if (!el) return;
         el.style.display = 'block';
         el.className = `mt-2 small alert alert-${type} py-1 px-2`;
         el.textContent = msg;
-        if (type === 'success' || type === 'info') setTimeout(() => { el.style.display = 'none'; }, 5000);
+        setTimeout(() => { el.style.display = 'none'; }, 5000);
     }
 
     // --- تحويل Base64URL إلى Uint8Array (للـ VAPID key) ---

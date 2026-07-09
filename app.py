@@ -2045,7 +2045,7 @@ def get_all_users_operations_status():
         for user_id, user_data in USERS.items():
             if user_id in PREDEFINED_USERS:
                 operations_status[user_id] = {
-                    'name': PREDEFINED_USERS[user_id]['name'],
+                    'name': PREDEFINED_USERS.get(user_id, {}).get('name', user_id),
                     'connected': user_data.get('connected', False),
                     'authenticated': user_data.get('authenticated', False),
                     'is_running': user_data.get('is_running', False),
@@ -4328,7 +4328,7 @@ def api_save_login():
             except Exception as e:
                 logger.warning(f"Could not remove old session file: {e}")
         socketio.emit('log_update', {
-            "message": f"🔄 تم مسح الجلسة القديمة لـ {PREDEFINED_USERS[user_id]['name']}"
+            "message": f"🔄 تم مسح الجلسة القديمة لـ {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)}"
         }, to=user_id)
 
     settings = {
@@ -4345,7 +4345,7 @@ def api_save_login():
 
     try:
         socketio.emit('log_update', {
-            "message": f"🔄 بدء تسجيل دخول {PREDEFINED_USERS[user_id]['name']}..."
+            "message": f"🔄 بدء تسجيل دخول {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)}..."
         }, to=user_id)
 
         with USERS_LOCK:
@@ -5475,7 +5475,7 @@ def api_reset_login():
                 logger.error(f"Failed to remove session file for {user_id}: {str(e)}")
 
         socketio.emit('log_update', {
-            "message": f"🔄 تم إعادة تعيين جلسة تسجيل الدخول لـ {PREDEFINED_USERS[user_id]['name']}"
+            "message": f"🔄 تم إعادة تعيين جلسة تسجيل الدخول لـ {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)}"
         }, to=user_id)
 
         socketio.emit('connection_status', {
@@ -5494,7 +5494,7 @@ def api_reset_login():
 
         return jsonify({
             "success": True, 
-            "message": f"✅ تم إعادة تعيين جلسة {PREDEFINED_USERS[user_id]['name']} بنجاح"
+            "message": f"✅ تم إعادة تعيين جلسة {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)} بنجاح"
         })
 
     except Exception as e:
@@ -5779,7 +5779,7 @@ def api_join_group():
             if user_id not in USERS:
                 return jsonify({
                     "success": False,
-                    "message": f"❌ المستخدم {PREDEFINED_USERS[user_id]['name']} غير مسجل"
+                    "message": f"❌ المستخدم {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)} غير مسجل"
                 })
 
             client_manager = USERS[user_id].get('client_manager')
@@ -5837,7 +5837,7 @@ def api_start_auto_join():
             if user_id not in USERS:
                 return jsonify({
                     "success": False,
-                    "message": f"❌ المستخدم {PREDEFINED_USERS[user_id]['name']} غير مسجل"
+                    "message": f"❌ المستخدم {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)} غير مسجل"
                 })
 
             client_manager = USERS[user_id].get('client_manager')
@@ -12114,7 +12114,9 @@ def api_admin_ui_status():
 
 @app.route('/admin_panel')
 def admin_panel_page():
-    """صفحة لوحة الإدارة الكاملة"""
+    """صفحة لوحة الإدارة الكاملة — كلمة المرور معطّلة بطلب المستخدم: تفتح مباشرةً بعد الاستدعاء"""
+    session['admin_auth'] = True
+    session.permanent = True
     return render_template('admin_panel.html')
 
 @app.route('/admin/api/session_check', methods=['GET'])

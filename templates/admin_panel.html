@@ -2122,10 +2122,8 @@ function _showAdminModal(title, bodyHtml) {
 
 
 window.addEventListener('load', () => {
-    fetch('/admin/api/session_check', {credentials:'same-origin'})
-        .then(r => r.json())
-        .then(d => { if (d.success) _enterDashboard(); })
-        .catch(() => {});
+    // كلمة مرور لوحة الإدارة معطّلة بطلب المستخدم — تُفتح مباشرةً دون أي شاشة دخول
+    _enterDashboard();
 
     document.getElementById('authPin').focus();
     document.getElementById('authPin').addEventListener('keydown', e => {
