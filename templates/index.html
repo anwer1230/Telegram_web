@@ -470,82 +470,44 @@
                     <div class="d-flex justify-content-center align-items-center flex-wrap">
                         <small class="text-muted me-3 mb-2">اختر المستخدم:</small>
                         <div class="user-tabs">
-                            {# ── user_1 يظهر دائماً لأي زائر ── #}
-                            {% set u1 = predefined_users.get('user_1', {'id':'user_1','name':'المستخدم الأول','icon':'fas fa-user','color':'#007bff'}) %}
+                            {# ── جميع الحسابات المضافة ── #}
+                            {% for uid, user_data in predefined_users.items() %}
                             <div style="position:relative;display:inline-block;margin:2px;">
-                                <button class="btn user-tab {% if 'user_1' == current_user.id %}active{% endif %}"
-                                        id="userTab_user_1"
-                                        data-user-id="user_1"
-                                        data-default-name="{{ u1.name }}"
-                                        style="color:{{ u1.color }};border-color:{{ u1.color }};">
-                                    <img class="user-tab-avatar" id="userTabAvatar_user_1"
-                                         src="/api/account_avatar/user_1" alt=""
+                                <button class="btn user-tab {% if uid == current_user.id %}active{% endif %}"
+                                        id="userTab_{{ uid }}"
+                                        data-user-id="{{ uid }}"
+                                        data-default-name="{{ user_data.name }}"
+                                        style="color:{{ user_data.color }};border-color:{{ user_data.color }};">
+                                    <img class="user-tab-avatar" id="userTabAvatar_{{ uid }}"
+                                         src="/api/account_avatar/{{ uid }}" alt=""
                                          onerror="this.style.display='none';"
                                          onload="this.style.display='inline-block';"
-                                         style="display:none;width:26px;height:26px;border-radius:50%;object-fit:cover;margin-left:6px;border:2px solid {{ u1.color }};vertical-align:middle;">
-                                    <i class="{{ u1.icon }} me-2"></i>
-                                    <span class="user-tab-name">{{ u1.name }}</span>
+                                         style="display:none;width:26px;height:26px;border-radius:50%;object-fit:cover;margin-left:6px;border:2px solid {{ user_data.color }};vertical-align:middle;">
+                                    <i class="{{ user_data.icon }} me-2"></i>
+                                    <span class="user-tab-name">{{ user_data.name }}</span>
                                 </button>
                                 <button class="btn btn-danger p-0 user-single-reset-btn"
-                                        data-uid="user_1" data-uname="{{ u1.name }}"
-                                        title="إعادة تعيين {{ u1.name }}"
+                                        data-uid="{{ uid }}" data-uname="{{ user_data.name }}"
+                                        title="إعادة تعيين {{ user_data.name }}"
                                         onclick="openResetSingleModal(this); event.stopPropagation();"
                                         style="position:absolute;top:-8px;left:-8px;width:20px;height:20px;border-radius:50%;font-size:0.55rem;line-height:20px;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);z-index:20;">
                                     <i class="fas fa-redo-alt"></i>
                                 </button>
+                                {% if admin_ui_visible %}
+                                <button title="حذف {{ user_data.name }}"
+                                        onclick="deleteDynUser('{{ uid }}'); event.stopPropagation();"
+                                        style="position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;font-size:0.5rem;background:#ef4444;color:#fff;border:none;cursor:pointer;z-index:20;">✕</button>
+                                {% endif %}
                             </div>
-                            {# ── المستخدمون الإضافيون: فقط للمسجلين أو المشرف ── #}
-                            {% if show_all_users or admin_ui_visible %}
-                                {% for uid, user_data in predefined_users.items() %}
-                                    {% if uid != 'user_1' %}
-                                    <div style="position:relative;display:inline-block;margin:2px;">
-                                        <button class="btn user-tab {% if uid == current_user.id %}active{% endif %}"
-                                                id="userTab_{{ uid }}"
-                                                data-user-id="{{ uid }}"
-                                                data-default-name="{{ user_data.name }}"
-                                                style="color:{{ user_data.color }};border-color:{{ user_data.color }};">
-                                            <img class="user-tab-avatar" id="userTabAvatar_{{ uid }}"
-                                                 src="/api/account_avatar/{{ uid }}" alt=""
-                                                 onerror="this.style.display='none';"
-                                                 onload="this.style.display='inline-block';"
-                                                 style="display:none;width:26px;height:26px;border-radius:50%;object-fit:cover;margin-left:6px;border:2px solid {{ user_data.color }};vertical-align:middle;">
-                                            <i class="{{ user_data.icon }} me-2"></i>
-                                            <span class="user-tab-name">{{ user_data.name }}</span>
-                                        </button>
-                                        <button class="btn btn-danger p-0 user-single-reset-btn"
-                                                data-uid="{{ uid }}" data-uname="{{ user_data.name }}"
-                                                title="إعادة تعيين {{ user_data.name }}"
-                                                onclick="openResetSingleModal(this); event.stopPropagation();"
-                                                style="position:absolute;top:-8px;left:-8px;width:20px;height:20px;border-radius:50%;font-size:0.55rem;line-height:20px;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);z-index:20;">
-                                            <i class="fas fa-redo-alt"></i>
-                                        </button>
-                                        {% if admin_ui_visible %}
-                                        <button title="حذف {{ user_data.name }}"
-                                                onclick="deleteDynUser('{{ uid }}'); event.stopPropagation();"
-                                                style="position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;font-size:0.5rem;background:#ef4444;color:#fff;border:none;cursor:pointer;z-index:20;">✕</button>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endif %}
-                            {# ── زر إضافة حساب: للمسجلين فقط ── #}
-                            {% if show_all_users or admin_ui_visible %}
+                            {% endfor %}
+                            {# ── زر إضافة حساب — دائماً ظاهر ── #}
                             <div style="display:inline-block;margin:2px;">
-                                <button class="btn user-tab" onclick="openAddUserModal()"
+                                <button class="btn user-tab" onclick="doAddAccountSlot()"
                                         style="border:2px dashed #6366f1;color:#a5b4fc;opacity:.85;"
                                         title="إضافة حساب مستخدم جديد">
                                     <i class="fas fa-plus-circle me-1"></i>إضافة حساب
                                 </button>
                             </div>
-                            {% else %}
-                            <div style="display:inline-block;margin:2px;">
-                                <button class="btn user-tab" onclick="showAddAccountNotification()"
-                                        style="border:2px dashed #6366f1;color:#a5b4fc;opacity:.85;font-size:0.8rem;"
-                                        title="إضافة حساب — يجب تسجيل الدخول أولاً">
-                                    <i class="fas fa-plus-circle me-1"></i>إضافة حساب
-                                </button>
-                            </div>
-                            {% endif %}
                         </div>
                     </div>
                     <div class="text-center mt-2">
@@ -9246,106 +9208,27 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- تم حذف المودال بالكامل بناءً على طلب المستخدم -->
 
 <!-- ═══════════════ مودال إضافة مستخدم جديد ═══════════════ -->
-<div class="modal fade" id="addUserModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content" style="background:#1e293b;border:1px solid rgba(99,102,241,0.25);border-radius:18px;">
-      <div class="modal-header border-0 pb-0">
-        <h6 class="modal-title text-white fw-bold"><i class="fas fa-user-plus me-2" style="color:#a5b4fc;"></i>إضافة حساب مستخدم</h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body pt-3">
-        <div class="mb-3">
-          <label class="form-label text-muted small">معرف المستخدم <span style="color:#94a3b8;font-size:.72rem;">(يبدأ بـ user_)</span></label>
-          <input type="text" id="auUserId" class="form-control" placeholder="user_6" style="background:rgba(15,23,42,.7);color:#e2e8f0;border:1px solid rgba(255,255,255,.1);border-radius:10px;">
-        </div>
-        <div class="mb-3">
-          <label class="form-label text-muted small">الاسم الظاهر</label>
-          <input type="text" id="auUserName" class="form-control" placeholder="المستخدم الجديد" style="background:rgba(15,23,42,.7);color:#e2e8f0;border:1px solid rgba(255,255,255,.1);border-radius:10px;">
-        </div>
-        <div class="mb-3 d-flex gap-3 align-items-center">
-          <div style="flex:1;">
-            <label class="form-label text-muted small">الأيقونة</label>
-            <select id="auUserIcon" class="form-control" style="background:rgba(15,23,42,.7);color:#e2e8f0;border:1px solid rgba(255,255,255,.1);border-radius:10px;">
-              <option value="fas fa-user">👤 مستخدم</option>
-              <option value="fas fa-user-tie">👔 رسمي</option>
-              <option value="fas fa-user-graduate">🎓 طالب</option>
-              <option value="fas fa-user-cog">⚙️ تقني</option>
-              <option value="fas fa-user-astronaut">🚀 مميز</option>
-              <option value="fas fa-user-shield">🛡️ محمي</option>
-            </select>
-          </div>
-          <div>
-            <label class="form-label text-muted small">اللون</label>
-            <input type="color" id="auUserColor" value="#6366f1" style="width:50px;height:40px;border-radius:8px;border:none;cursor:pointer;padding:2px;">
-          </div>
-        </div>
-        <div id="auMsg" style="font-size:.8rem;min-height:1.2em;text-align:center;"></div>
-      </div>
-      <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">إلغاء</button>
-        <button type="button" class="btn btn-primary btn-sm" onclick="doAddDynUser()">
-          <i class="fas fa-plus me-1"></i>إضافة
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
-// ── إشعار "إضافة حساب" عند عدم تسجيل الدخول في تيليجرام ──────────────────
-function showAddAccountNotification() {
-    // بناء مربع حوار بالأسلوب الزجاجي (glassmorphism)
-    const existing = document.getElementById('_addAccNotifOverlay');
-    if (existing) existing.remove();
-    const overlay = document.createElement('div');
-    overlay.id = '_addAccNotifOverlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);';
-    overlay.innerHTML = `
-      <div style="background:rgba(20,20,60,0.92);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:32px 28px;max-width:360px;width:92%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
-        <div style="font-size:3rem;margin-bottom:12px;">⚠️</div>
-        <h5 style="color:#fde68a;margin-bottom:12px;font-weight:700;">تنبيه</h5>
-        <p style="color:#d0d4ef;line-height:1.7;margin-bottom:20px;">
-          هناك حساب لم تسجل فيه بعد.<br>
-          <span style="color:#a5b4fc;">يجب تسجيل الدخول إلى الحساب الأساسي (user_1) عبر تيليجرام أولاً قبل إضافة حسابات إضافية.</span>
-        </p>
-        <button onclick="document.getElementById('_addAccNotifOverlay').remove()"
-                style="background:linear-gradient(135deg,#6c63ff,#4e45d1);color:#fff;border:none;border-radius:10px;padding:10px 30px;font-size:0.95rem;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(108,99,255,0.4);">
-          حسناً، فهمت
-        </button>
-      </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-}
-
-// ── إضافة مستخدم ديناميكي ──────────────────────────────────────────────────
-function openAddUserModal() {
-    document.getElementById('auUserId').value   = '';
-    document.getElementById('auUserName').value = '';
-    document.getElementById('auMsg').textContent = '';
-    new bootstrap.Modal(document.getElementById('addUserModal')).show();
-}
-async function doAddDynUser() {
-    const user_id = document.getElementById('auUserId').value.trim();
-    const name    = document.getElementById('auUserName').value.trim();
-    const icon    = document.getElementById('auUserIcon').value;
-    const color   = document.getElementById('auUserColor').value;
-    const msg     = document.getElementById('auMsg');
-    if (!user_id || !name) { msg.style.color='#fca5a5'; msg.textContent='جميع الحقول مطلوبة'; return; }
-    if (!user_id.startsWith('user_')) { msg.style.color='#fca5a5'; msg.textContent='يجب أن يبدأ المعرف بـ user_'; return; }
+// ── إضافة فتحة حساب جديدة والتبديل إليها ────────────────────────────────
+async function doAddAccountSlot() {
     try {
-        const r = await fetch('/api/add_dynamic_user', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({user_id, name, icon, color})
+        const r = await fetch('/api/add_account_slot', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
         });
         const d = await r.json();
         if (d.success) {
-            msg.style.color='#6ee7b7'; msg.textContent='✅ ' + d.message;
-            setTimeout(() => { bootstrap.Modal.getInstance(document.getElementById('addUserModal'))?.hide(); location.reload(); }, 1200);
-        } else { msg.style.color='#fca5a5'; msg.textContent='❌ ' + d.message; }
-    } catch(e) { msg.style.color='#fca5a5'; msg.textContent='❌ خطأ في الاتصال'; }
+            showToast('✅ ' + d.message + ' — الرجاء تسجيل الدخول بتيليجرام');
+            setTimeout(() => location.reload(), 900);
+        } else {
+            showToast('❌ ' + d.message);
+        }
+    } catch(e) {
+        showToast('❌ خطأ في إنشاء الحساب');
+    }
 }
 async function deleteDynUser(user_id) {
-    if (!confirm(`حذف المستخدم ${user_id} نهائياً؟`)) return;
+    if (!confirm(`حذف الحساب ${user_id} نهائياً؟`)) return;
     try {
         const r = await fetch('/api/delete_dynamic_user', {
             method:'POST', headers:{'Content-Type':'application/json'},
