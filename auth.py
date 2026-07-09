@@ -438,13 +438,7 @@ def _dyn_github_params():
 
 # ── المستخدمون الثابتون الافتراضيون ──────────────────────────
 
-_DEFAULT_PREDEFINED_USERS = {
-    "user_1": {"id": "user_1", "name": "المستخدم الأول",    "icon": "fas fa-user",           "color": "#007bff"},
-    "user_2": {"id": "user_2", "name": "المستخدم الثاني",   "icon": "fas fa-user-tie",        "color": "#28a745"},
-    "user_3": {"id": "user_3", "name": "المستخدم الثالث",   "icon": "fas fa-user-graduate",   "color": "#ffc107"},
-    "user_4": {"id": "user_4", "name": "المستخدم الرابع",   "icon": "fas fa-user-cog",        "color": "#dc3545"},
-    "user_5": {"id": "user_5", "name": "المستخدم الخامس",   "icon": "fas fa-user-astronaut",  "color": "#6f42c1"},
-}
+_DEFAULT_PREDEFINED_USERS = {}
 
 _DYN_USERS_LOCK = __import__('threading').Lock()
 
