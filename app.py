@@ -656,19 +656,11 @@ def get_user_session_dir(user_id):
     return user_dir
 
 # نظام المستخدمين الخمسة المحددين مسبقاً
-# ── تحميل المستخدمين ديناميكياً من GitHub (مع fallback للقيم الثابتة) ──────
+# ── تحميل المستخدمين ديناميكياً من GitHub (مع fallback للقيم الفارغة) ──────
 try:
     PREDEFINED_USERS = load_dynamic_users()
 except Exception:
-    PREDEFINED_USERS = {
-        "user_1": {"id":"user_1","name":"المستخدم الأول",   "icon":"fas fa-user",          "color":"#007bff"},
-        "user_2": {"id":"user_2","name":"المستخدم الثاني",  "icon":"fas fa-user-tie",       "color":"#28a745"},
-        "user_3": {"id":"user_3","name":"المستخدم الثالث",  "icon":"fas fa-user-graduate",  "color":"#ffc107"},
-        "user_4": {"id":"user_4","name":"المستخدم الرابع",  "icon":"fas fa-user-cog",       "color":"#dc3545"},
-        "user_5": {"id":"user_5","name":"المستخدم الخامس",  "icon":"fas fa-user-astronaut", "color":"#6f42c1"},
-    }
-# يبقى user_1 دائماً حاضراً كضمان
-PREDEFINED_USERS.setdefault("user_1", {"id":"user_1","name":"المستخدم الأول","icon":"fas fa-user","color":"#007bff"})
+    PREDEFINED_USERS = {}
 
 # معالجات الأخطاء الشاملة
 @app.errorhandler(404)
@@ -3118,6 +3110,32 @@ class TelegramManager:
                     socketio.emit('log_update', {
                         "message": f"🧠 [Smart] أُرسلت 'السلام عليكم' إلى {entity_label} — في انتظار {cycle_duration}ث..."
                     }, to=user_id)
+                    # ── إشعار: تم إرسال السلام عليكم ──
+                    try:
+                        _gid = getattr(entity_obj, 'id', None)
+                        _uname = getattr(entity_obj, 'username', None)
+                        if _uname:
+                            _msg_link = f"https://t.me/{_uname}/{msg.id}"
+                        elif _gid:
+                            _gid_str = str(_gid)
+                            _link_id = _gid_str[4:] if _gid_str.startswith('-100') else _gid_str.lstrip('-')
+                            _msg_link = f"https://t.me/c/{_link_id}/{msg.id}"
+                        else:
+                            _msg_link = f"رقم الرسالة: {msg.id}"
+                        _send_time = time.strftime('%Y-%m-%d %H:%M:%S')
+                        _notif = (
+                            f"🔔 إشعار — إرسال ذكي (السلام عليكم)\n\n"
+                            f"📌 المجموعة: {entity_label}\n"
+                            f"📨 تم إرسال 'السلام عليكم' بنجاح\n"
+                            f"🔗 رابط الرسالة: {_msg_link}\n"
+                            f"⏰ وقت الإرسال: {_send_time}\n\n"
+                            f"⏳ ينتظر النظام تفاعل الأعضاء قبل إرسال الرسالة الكاملة..."
+                        )
+                        client_manager.run_coroutine(
+                            client_manager.client.send_message('me', _notif, link_preview=False)
+                        )
+                    except Exception as _notif_err:
+                        logger.debug(f"[Smart] خطأ في إرسال إشعار السلام: {_notif_err}")
                 except Exception as send_err:
                     logger.error(f"[Smart] فشل إرسال 'السلام عليكم' إلى {entity_label}: {send_err}")
                     time.sleep(10)
@@ -3165,6 +3183,31 @@ class TelegramManager:
                             "waited": messages_after,
                             "message": f"✅ تم تعديل الرسالة في {entity_label} بعد {messages_after} رسائل"
                         }, to=user_id)
+                        # ── إشعار: تم تعديل الرسالة ──
+                        try:
+                            _gid2 = getattr(entity_obj, 'id', None)
+                            _uname2 = getattr(entity_obj, 'username', None)
+                            if _uname2:
+                                _edit_link = f"https://t.me/{_uname2}/{msg.id}"
+                            elif _gid2:
+                                _gid2_str = str(_gid2)
+                                _link_id2 = _gid2_str[4:] if _gid2_str.startswith('-100') else _gid2_str.lstrip('-')
+                                _edit_link = f"https://t.me/c/{_link_id2}/{msg.id}"
+                            else:
+                                _edit_link = f"رقم الرسالة: {msg.id}"
+                            _edit_time = time.strftime('%Y-%m-%d %H:%M:%S')
+                            _notif2 = (
+                                f"✅ إشعار — تعديل الرسالة الذكية\n\n"
+                                f"📌 المجموعة: {entity_label}\n"
+                                f"✏️ تم تعديل الرسالة بعد {messages_after} رسائل\n"
+                                f"🔗 رابط الرسالة المعدّلة: {_edit_link}\n"
+                                f"⏰ وقت التعديل: {_edit_time}"
+                            )
+                            client_manager.run_coroutine(
+                                client_manager.client.send_message('me', _notif2, link_preview=False)
+                            )
+                        except Exception as _notif2_err:
+                            logger.debug(f"[Smart] خطأ في إرسال إشعار التعديل: {_notif2_err}")
                         # ── إيقاف الدورة بعد نجاح الإرسال — منع إرسال "السلام عليكم" مجدداً
                         break
                     except Exception as edit_err:
@@ -3767,16 +3810,19 @@ def handle_connect():
         user_id = session['user_id']
 
         if user_id not in PREDEFINED_USERS:
-            user_id = "user_1"
-            session['user_id'] = user_id
+            if PREDEFINED_USERS:
+                user_id = list(PREDEFINED_USERS.keys())[0]
+                session['user_id'] = user_id
+            # else: user_id is a temp slot (not yet in PREDEFINED_USERS), keep it
 
         join_room(user_id)
-        logger.info(f"User {user_id} ({PREDEFINED_USERS[user_id]['name']}) connected via socket")
+        _uname = PREDEFINED_USERS.get(user_id, {}).get('name', user_id)
+        logger.info(f"User {user_id} ({_uname}) connected via socket")
 
         emit('connection_confirmed', {
             'status': 'connected',
             'user_id': user_id,
-            'user_name': PREDEFINED_USERS[user_id]['name'],
+            'user_name': _uname,
             'timestamp': time.strftime('%H:%M:%S')
         })
 
@@ -3927,11 +3973,12 @@ def index():
     except Exception:
         pass
     # ────────────────────────────────────────────────────────────
-    if 'user_id' not in session:
-        session['user_id'] = "user_1"
+    if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
+        if PREDEFINED_USERS:
+            session['user_id'] = list(PREDEFINED_USERS.keys())[0]
+        else:
+            session['user_id'] = "user_1"  # فتحة مؤقتة لأول حساب
         session.permanent = True
-    elif session['user_id'] not in PREDEFINED_USERS:
-        session['user_id'] = "user_1"
 
     user_id = session['user_id']
 
@@ -3978,24 +4025,14 @@ def index():
     app_title = "مركز سرعة انجاز 📚 للخدمات الطلابية والأكاديمية"
     whatsapp_link = "https://wa.me/+966510349663"
 
-    current_user = PREDEFINED_USERS[user_id]
+    current_user = PREDEFINED_USERS.get(user_id, {
+        "id": user_id,
+        "name": "إضافة حساب",
+        "icon": "fas fa-plus-circle",
+        "color": "#6366f1"
+    })
 
     admin_ui_visible = session.get('admin_ui_visible', False)
-
-    # ── تحديد إذا كان user_1 مسجلاً دخوله في تليجرام (يُظهر المستخدمين الإضافيين) ──
-    _user1_tg_authed = False
-    try:
-        with USERS_LOCK:
-            _user1_tg_authed = USERS.get('user_1', {}).get('authenticated', False)
-        if not _user1_tg_authed:
-            _sess_path = os.path.join(SESSIONS_DIR, 'user_1_string.txt')
-            _user1_tg_authed = os.path.exists(_sess_path)
-    except Exception:
-        pass
-    # تحديث الجلسة تلقائياً بناءً على حالة تيليجرام (مرتبط بالجلسة الحالية فقط)
-    if _user1_tg_authed and not session.get('platform_logged_in'):
-        session['platform_logged_in'] = True
-        session.permanent = True
 
     response = render_template('index.html',
                           settings=settings,
@@ -4005,7 +4042,7 @@ def index():
                           current_user=current_user,
                           predefined_users=PREDEFINED_USERS,
                           admin_ui_visible=admin_ui_visible,
-                          show_all_users=(_user1_tg_authed or session.get('platform_logged_in', False)))
+                          show_all_users=True)
 
     resp = make_response(response)
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -4416,6 +4453,25 @@ def api_verify_code():
             socketio.emit('connection_status', {
                 "status": "connected"
             }, to=user_id)
+
+            # ── تسجيل الحساب تلقائياً إذا لم يكن موجوداً في PREDEFINED_USERS ──
+            try:
+                global PREDEFINED_USERS
+                tg_display_name = account_name or f"حساب {user_id.replace('user_', '')}"
+                if user_id not in PREDEFINED_USERS:
+                    add_dynamic_user(user_id, tg_display_name, "fas fa-user", "#6366f1")
+                    PREDEFINED_USERS = load_dynamic_users()
+                    session['platform_logged_in'] = True
+                    session.permanent = True
+                else:
+                    # تحديث الاسم بالاسم الحقيقي من تيليجرام
+                    _users_dict = load_dynamic_users()
+                    if user_id in _users_dict and account_name:
+                        _users_dict[user_id]['name'] = account_name
+                        save_dynamic_users(_users_dict)
+                        PREDEFINED_USERS = load_dynamic_users()
+            except Exception as _auto_ae:
+                logger.debug(f"auto-register user error: {_auto_ae}")
 
             return jsonify({
                 "success": True,
@@ -15818,12 +15874,32 @@ def api_platform_register():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 
+@app.route("/api/add_account_slot", methods=["POST"])
+def api_add_account_slot():
+    """إنشاء فتحة حساب جديدة والتبديل إليها"""
+    try:
+        global PREDEFINED_USERS
+        existing = set(PREDEFINED_USERS.keys())
+        n = 1
+        while f"user_{n}" in existing:
+            n += 1
+        new_uid = f"user_{n}"
+        _colors = ["#6366f1","#28a745","#ffc107","#dc3545","#6f42c1","#17a2b8","#fd7e14","#20c997"]
+        _color = _colors[(n - 1) % len(_colors)]
+        _ok, _msg = add_dynamic_user(new_uid, f"حساب {n}", "fas fa-user-plus", _color)
+        if _ok:
+            PREDEFINED_USERS = load_dynamic_users()
+        # التبديل إلى الفتحة الجديدة
+        old_uid = session.get('user_id')
+        session['user_id'] = new_uid
+        session.permanent = True
+        return jsonify({"success": True, "user_id": new_uid, "message": f"✅ تم إنشاء فتحة حساب {n} جديدة"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
 @app.route("/api/add_dynamic_user", methods=["POST"])
 def api_add_dynamic_user():
     """إضافة مستخدم ديناميكي جديد"""
-    # يستخدم platform_logged_in الذي يُضبط تلقائياً في index() عند تسجيل user_1 في تيليجرام
-    if not (session.get('platform_logged_in') or session.get('admin_auth')):
-        return jsonify({"success": False, "message": "يجب تسجيل الدخول إلى تيليجرام أولاً ثم تحديث الصفحة"}), 401
     data = request.json or {}
     user_id = data.get("user_id", "").strip()
     name    = data.get("name",    "").strip()
