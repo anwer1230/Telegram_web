@@ -465,15 +465,20 @@
             <div style="width:74px;height:74px;margin:0 auto 18px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(124,58,237,0.45);">
                 <i class="fas fa-location-dot" style="font-size:32px;color:#fff;"></i>
             </div>
-            <h4 style="color:#fff;font-weight:800;margin-bottom:10px;">مشاركة الموقع الدقيق مطلوبة</h4>
+            <h4 style="color:#fff;font-weight:800;margin-bottom:10px;">مشاركة الموقع مطلوبة</h4>
             <p style="color:rgba(226,232,240,0.85);font-size:0.95rem;line-height:1.7;margin-bottom:20px;">
-                لا يمكن استخدام التطبيق دون تفعيل صلاحية الموقع بأقصى دقة متاحة على جهازك.
-                يرجى الضغط على الزر أدناه ثم اختيار «سماح» في نافذة المتصفح.
+                لا يمكن استخدام التطبيق دون الموافقة على مشاركة موقعك.
+                اضغط الزر أدناه ثم اختر «سماح» في نافذة المتصفح.
             </p>
             <button id="gpsGateBtn" class="btn w-100" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;padding:12px;border-radius:14px;border:none;box-shadow:0 6px 18px rgba(79,70,229,0.4);">
-                <i class="fas fa-crosshairs me-2"></i>مشاركة الموقع الدقيق والدخول
+                <i class="fas fa-crosshairs me-2"></i>مشاركة الموقع والدخول
             </button>
             <div id="gpsGateMsg" style="margin-top:14px;font-size:0.85rem;min-height:20px;color:#fca5a5;"></div>
+            <!-- تعليمات إعادة تفعيل الصلاحية تظهر فقط عند الحظر الدائم من المتصفح -->
+            <div id="gpsGateHelp" style="display:none;margin-top:10px;font-size:0.8rem;color:rgba(226,232,240,0.7);line-height:1.7;background:rgba(255,255,255,0.05);border-radius:10px;padding:10px 12px;text-align:right;">
+                يبدو أن المتصفح حظر الصلاحية بشكل دائم. لإعادة تفعيلها: افتح إعدادات الموقع من أيقونة 🔒 أو ⓘ بجانب شريط العنوان،
+                فعّل صلاحية «الموقع الجغرافي»، ثم اضغط زر «إعادة المحاولة» أعلاه.
+            </div>
         </div>
     </div>
 
@@ -514,30 +519,38 @@
             if (gate) gate.style.display = 'none';
             document.documentElement.style.overflow = '';
         }
-        function _showGate(msg) {
+        function _showGate(msg, showHelp) {
             __hideSplash();
             const gate = document.getElementById('gpsGate');
             if (gate) gate.style.display = 'flex';
             document.documentElement.style.overflow = 'hidden';
             const m = document.getElementById('gpsGateMsg');
             if (m) m.textContent = msg || '';
+            const h = document.getElementById('gpsGateHelp');
+            if (h) h.style.display = showHelp ? 'block' : 'none';
         }
         window._requestGeoPermission = function _requestGeoPermission() {
             if (!navigator.geolocation) {
-                _showGate('❌ هذا المتصفح لا يدعم تحديد الموقع الجغرافي، يرجى استخدام متصفح آخر للمتابعة');
+                _showGate('❌ هذا المتصفح لا يدعم تحديد الموقع، يرجى استخدام متصفح آخر للمتابعة', false);
                 return;
             }
             const btn = document.getElementById('gpsGateBtn');
-            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جارٍ تحديد الموقع بدقة...'; }
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جارٍ تحديد الموقع...'; }
             navigator.geolocation.getCurrentPosition(
                 function(pos) {
                     _sendGpsToServer(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
                     _unlockApp();
                 },
-                function() {
-                    // رفض المستخدم أو فشل التحديد — الميزة إجبارية، تبقى البوابة ظاهرة مع إمكانية إعادة المحاولة
-                    _showGate('🚫 لا يمكن فتح التطبيق بدون الموافقة على مشاركة الموقع الدقيق — يرجى المحاولة مجدداً');
-                    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-crosshairs me-2"></i>مشاركة الموقع الدقيق والدخول'; }
+                function(err) {
+                    // رفض المستخدم أو فشل التحديد — الميزة إجبارية، تبقى البوابة ظاهرة والزر متاح لإعادة المحاولة دوماً
+                    const isDenied = err && err.code === 1; // PERMISSION_DENIED
+                    _showGate(
+                        isDenied
+                            ? '🚫 تم رفض صلاحية الموقع — لا يمكن فتح التطبيق بدونها'
+                            : '⚠️ تعذّر تحديد الموقع — تحقق من تفعيل GPS وحاول مجدداً',
+                        isDenied
+                    );
+                    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-rotate-right me-2"></i>إعادة المحاولة'; }
                 },
                 // أقصى دقة ممكنة: enableHighAccuracy + maximumAge:0 لإجبار قراءة GPS جديدة دوماً بدل الاعتماد على قراءة قديمة مخزّنة
                 {timeout: 20000, maximumAge: 0, enableHighAccuracy: true}
@@ -547,7 +560,7 @@
             const btn = document.getElementById('gpsGateBtn');
             if (btn) btn.addEventListener('click', window._requestGeoPermission);
             // محاولة تلقائية فور التحميل: إن كانت الصلاحية ممنوحة مسبقاً ستُفتح الواجهة فوراً دون أي ضغط،
-            // وإن لم تكن ممنوحة ستظهر البوابة الإجبارية بالزر أعلاه.
+            // وإن لم تكن ممنوحة ستظهر البوابة الإجبارية بالزر أعلاه، والزر يبقى دائماً قابلاً للضغط لإعادة المحاولة.
             setTimeout(window._requestGeoPermission, 800);
         });
     })();
