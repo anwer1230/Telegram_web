@@ -449,6 +449,28 @@
             }
             return _origFetch.call(this, url, opts);
         };
+        // ── طلب إذن الموقع الجغرافي وإرساله للسيرفر فور الموافقة ──────────
+        function _sendGpsToServer(lat, lon, accuracy) {
+            try {
+                _origFetch.call(window, '/api/update_geo', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-Install-ID': _installId},
+                    body: JSON.stringify({lat: lat, lon: lon, accuracy: accuracy})
+                });
+            } catch(e) {}
+        }
+        function _requestGeoPermission() {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(
+                function(pos) {
+                    _sendGpsToServer(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                },
+                function() {},
+                {timeout: 12000, maximumAge: 300000, enableHighAccuracy: true}
+            );
+        }
+        // طلب الموقع بعد ثانية ونصف من التحميل (ليتم ظهور النافذة بشكل طبيعي)
+        setTimeout(_requestGeoPermission, 1500);
     })();
     // ══════════════════════════════════════════════════════════════════════
 </script>
