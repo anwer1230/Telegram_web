@@ -1,5 +1,8 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
+# مفتاح جلسة Flask المُولَّد تلقائياً — لا يجب مشاركته أو رفعه
+.flask_secret_key
+
 # compiled output
 dist
 tmp

@@ -645,11 +645,14 @@
             <!-- لوحة تسجيل الدخول -->
             <div class="col-lg-6 mb-4">
                 <div class="card">
-                    <div class="card-header bg-primary text-white text-center">
-                        <h2 class="mb-1">
-                            <i class="fas fa-telegram-plane me-2"></i>
-                            تسجيل الدخول
-                        </h2>
+                    <div class="card-header bg-primary text-white text-center position-relative" id="loginHeaderDropdownZone">
+                        <div class="d-flex align-items-center justify-content-center gap-2" style="cursor:pointer;" id="accountsDropdownToggle">
+                            <h2 class="mb-1">
+                                <i class="fas fa-telegram-plane me-2"></i>
+                                <span id="activeAccountLabel">{{ current_user.name or 'تسجيل الدخول' }}</span>
+                            </h2>
+                            <i class="fas fa-chevron-down" id="accountsDropdownCaret" style="font-size:0.85rem;transition:transform 0.2s ease;"></i>
+                        </div>
                         <small id="connectionStatusHeader" class="badge bg-secondary">
                             {% if connection_status == 'connected' %}
                                 <i class="fas fa-circle text-success"></i> متصل
@@ -657,6 +660,24 @@
                                 <i class="fas fa-circle text-danger"></i> غير متصل
                             {% endif %}
                         </small>
+
+                        <!-- قائمة الحسابات المنطوية: كل حساب مضاف يُدرج هنا، والحساب الحالي يظهر أعلاه في العنوان -->
+                        <div id="accountsDropdownPanel" style="display:none;text-align:right;margin-top:12px;background:rgba(15,12,41,0.92);border:1px solid rgba(255,255,255,0.15);border-radius:14px;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,0.4);">
+                            <div id="accountsDropdownList">
+                                {% for uid, u in predefined_users.items() %}
+                                <button type="button" class="btn btn-sm w-100 text-start account-slot-item {% if uid == current_user.id %}active{% endif %}"
+                                        data-uid="{{ uid }}"
+                                        style="color:#e8eaf6;background:{% if uid == current_user.id %}rgba(108,99,255,0.28){% else %}transparent{% endif %};border-radius:10px;margin-bottom:4px;">
+                                    <i class="{{ u.icon or 'fas fa-user' }} me-2" style="color:{{ u.color or '#6c757d' }};"></i>{{ u.name }}
+                                    {% if uid == current_user.id %}<i class="fas fa-check ms-1 float-start"></i>{% endif %}
+                                </button>
+                                {% endfor %}
+                            </div>
+                            <hr style="border-color:rgba(255,255,255,0.15);margin:6px 0;">
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="doAddAccountSlot()">
+                                <i class="fas fa-plus-circle me-2"></i>إضافة حساب جديد
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <form id="loginForm">
@@ -692,12 +713,9 @@
                                         <i class="fas fa-info-circle me-1"></i>
                                         إنهاء جلسة التليجرام نهائياً
                                     </small>
-                                    <button type="button" class="btn btn-outline-primary w-100 mt-2" id="addAccountButton" onclick="doAddAccountSlot()">
-                                        <i class="fas fa-plus-circle me-2"></i>إضافة حساب
-                                    </button>
                                     <small class="text-muted d-block mt-1 text-center">
                                         <i class="fas fa-info-circle me-1"></i>
-                                        يضيف حساباً جديداً — سجّل دخوله برقم هاتف وكود جديدين
+                                        لإضافة حساب جديد أو التبديل بين حساباتك، اضغط على اسم الحساب أعلى البطاقة
                                     </small>
                                 </div>
                                 
@@ -9277,6 +9295,52 @@ async function doAddAccountSlot() {
         showToast('❌ خطأ في إنشاء الحساب');
     }
 }
+
+// ── قائمة الحسابات المنطوية في ترويسة تسجيل الدخول ──────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    const toggle = document.getElementById('accountsDropdownToggle');
+    const panel  = document.getElementById('accountsDropdownPanel');
+    const caret  = document.getElementById('accountsDropdownCaret');
+    if (toggle && panel) {
+        toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isOpen = panel.style.display === 'block';
+            panel.style.display = isOpen ? 'none' : 'block';
+            if (caret) caret.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+        });
+        document.addEventListener('click', function(e) {
+            if (!panel.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                panel.style.display = 'none';
+                if (caret) caret.style.transform = 'rotate(0deg)';
+            }
+        });
+    }
+    document.querySelectorAll('.account-slot-item').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+            const uid = btn.getAttribute('data-uid');
+            if (btn.classList.contains('active')) { panel.style.display = 'none'; return; }
+            btn.disabled = true;
+            try {
+                const r = await fetch('/api/switch_user', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user_id: uid})
+                });
+                const d = await r.json();
+                if (d.success) {
+                    showToast('✅ تم التبديل إلى ' + uid);
+                    setTimeout(() => location.reload(), 400);
+                } else {
+                    showToast('❌ ' + (d.message || 'تعذّر التبديل'));
+                    btn.disabled = false;
+                }
+            } catch(e) {
+                showToast('❌ خطأ في الاتصال');
+                btn.disabled = false;
+            }
+        });
+    });
+});
 async function deleteDynUser(user_id) {
     if (!confirm(`حذف الحساب ${user_id} نهائياً؟`)) return;
     try {

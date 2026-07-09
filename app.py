@@ -393,7 +393,31 @@ def _get_user_logs(user_id: str, level_filter=None) -> list:
 
 # إنشاء التطبيق
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", os.urandom(24))
+
+def _get_persistent_secret_key():
+    """مفتاح جلسة ثابت لا يتغيّر بين إعادة التشغيل أو بين عمليات (workers) متعددة.
+    استخدام os.urandom() هنا كان يولّد مفتاحاً جديداً في كل عملية تشغيل، مما يُبطل
+    كل الجلسات (تسجيل دخول الأدمن، إضافة حساب...) بمجرد أن تصل الطلبات لعملية أخرى
+    أو يُعاد تشغيل الخادم — لذلك يجب أن يكون المفتاح ثابتاً ومخزَّناً على القرص."""
+    env_secret = os.environ.get("SESSION_SECRET")
+    if env_secret:
+        return env_secret
+    key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".flask_secret_key")
+    try:
+        if os.path.exists(key_path):
+            with open(key_path, "r", encoding="utf-8") as f:
+                existing = f.read().strip()
+                if existing:
+                    return existing
+        new_key = os.urandom(32).hex()
+        with open(key_path, "w", encoding="utf-8") as f:
+            f.write(new_key)
+        return new_key
+    except Exception:
+        # كملاذ أخير فقط (بيئة قراءة فقط) — يبقى ثابتاً طوال عمر العملية على الأقل
+        return "fallback-static-secret-do-not-rely-on-this-set-SESSION_SECRET-env-var"
+
+app.secret_key = _get_persistent_secret_key()
 
 # إعداد SocketIO — threading mode لتجنب تعارض asyncio/gevent
 socketio = SocketIO(
