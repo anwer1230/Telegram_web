@@ -14642,7 +14642,9 @@ def api_add_account_slot():
     """إنشاء فتحة حساب جديدة والتبديل إليها"""
     try:
         global PREDEFINED_USERS
-        existing = set(PREDEFINED_USERS.keys())
+        # نحسب الأسماء الموجودة فعلياً (تحميل جديد لا نسخة قديمة مخزّنة بالذاكرة) لتجنّب تكرار المعرّف
+        # أو فشل الإنشاء بسبب معرّف يعتقد الخادم أنه فاضٍ بينما هو محجوز فعلاً في الملف/GitHub.
+        existing = set(load_dynamic_users().keys())
         n = 1
         while f"user_{n}" in existing:
             n += 1
@@ -14650,12 +14652,21 @@ def api_add_account_slot():
         _colors = ["#6366f1","#28a745","#ffc107","#dc3545","#6f42c1","#17a2b8","#fd7e14","#20c997"]
         _color = _colors[(n - 1) % len(_colors)]
         _ok, _msg = add_dynamic_user(new_uid, f"حساب {n}", "fas fa-user-plus", _color)
-        if _ok:
-            PREDEFINED_USERS = load_dynamic_users()
+        if not _ok:
+            # فشل الإنشاء فعلياً — لا نبدّل الجلسة ولا نعيد success:true، وإلا يبقى المستخدم
+            # عالقاً على حساب غير موجود في القائمة (وهذا ما كان يجعل الواجهة "تضل ثابتة كما هي").
+            return jsonify({"success": False, "message": _msg or "❌ فشل إنشاء الحساب"})
+        PREDEFINED_USERS = load_dynamic_users()
+        # حفظ إعدادات الحساب الحالي قبل الانتقال، تماماً كما يفعل التبديل بين الحسابات
+        old_uid = session.get('user_id', 'user_1')
+        if old_uid in USERS:
+            _cur_settings = USERS[old_uid].get('settings', {})
+            if _cur_settings:
+                save_settings(old_uid, _cur_settings)
         # التبديل إلى الفتحة الجديدة
-        old_uid = session.get('user_id')
         session['user_id'] = new_uid
         session.permanent = True
+        get_or_create_user(new_uid)
         return jsonify({"success": True, "user_id": new_uid, "message": f"✅ تم إنشاء فتحة حساب {n} جديدة"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})

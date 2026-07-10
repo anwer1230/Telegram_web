@@ -8648,8 +8648,15 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 
-    <!-- أيقونة الإدارة — مخفية دائماً، الوصول عبر كلمة المرور في خانة البحث فقط -->
-    <div id="adminIconWrapper" style="display:none!important;"></div>
+    <!-- أيقونة الإدارة — ظاهرة دائماً في الواجهة الرئيسية بطلب المستخدم، تفتح اللوحة مباشرة دون كلمة مرور -->
+    <button type="button" id="adminIconWrapper" data-bs-toggle="modal" data-bs-target="#adminPanelModal"
+            title="لوحة الإدارة"
+            style="position:fixed;left:18px;bottom:18px;z-index:1200;width:52px;height:52px;border-radius:50%;
+                   background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;font-size:1.3rem;
+                   box-shadow:0 8px 24px rgba(99,102,241,0.55);cursor:pointer;display:flex;
+                   align-items:center;justify-content:center;">
+        <i class="fas fa-crown"></i>
+    </button>
 
 <!-- ══════════════════ مودال: استعراض المجموعات ══════════════════ -->
 <div class="modal fade" id="browseGroupsModal" tabindex="-1" aria-hidden="true">
