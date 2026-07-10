@@ -6739,56 +6739,9 @@ async function executeResetSingle() {
       <!-- ─── جسم اللوحة ─── -->
       <div class="modal-body p-0">
 
-        <!-- ── شاشة المصادقة ── -->
-        <div id="adminAuthScreen" style="padding:32px 24px;text-align:center;">
-          <div style="width:64px;height:64px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
-                      border-radius:18px;display:flex;align-items:center;justify-content:center;
-                      margin:0 auto 16px;box-shadow:0 6px 24px rgba(99,102,241,0.4);">
-            <i class="fas fa-shield-alt" style="font-size:1.6rem;color:#fff;"></i>
-          </div>
-          <h6 style="color:#e2e8f0;font-weight:700;margin-bottom:4px;">منطقة محظورة</h6>
-          <p style="color:#64748b;font-size:0.8rem;margin-bottom:24px;">
-            للمشرفين المصرح لهم فقط — سجّل دخولك للمتابعة
-          </p>
+        <!-- شاشة المصادقة (كلمة المرور والبصمة) أُزيلت بالكامل بطلب المستخدم — اللوحة تُفتح مباشرةً -->
 
-          <div id="adminAuthMsg" style="display:none;margin-bottom:12px;"></div>
-
-          <!-- حقل الرمز السري -->
-          <div style="max-width:280px;margin:0 auto 14px;">
-            <div style="position:relative;">
-              <input type="password" id="adminPinInput" placeholder="كلمة المرور"
-                     onkeydown="if(event.key==='Enter') adminDoLogin()"
-                     style="width:100%;background:#1e1e3a;border:1px solid rgba(99,102,241,0.35);
-                            color:#e2e8f0;padding:10px 44px 10px 14px;border-radius:10px;
-                            font-size:0.9rem;outline:none;text-align:center;letter-spacing:2px;">
-              <i class="fas fa-lock"
-                 style="position:absolute;left:14px;top:50%;transform:translateY(-50%);
-                        color:#6366f1;font-size:0.85rem;"></i>
-            </div>
-          </div>
-
-          <!-- زر الدخول بكلمة المرور -->
-          <button onclick="adminDoLogin()" id="adminLoginBtn"
-                  style="width:100%;max-width:280px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
-                         border:none;color:#fff;padding:10px 20px;border-radius:10px;
-                         font-size:0.88rem;font-weight:700;cursor:pointer;margin-bottom:12px;
-                         box-shadow:0 4px 16px rgba(99,102,241,0.4);">
-            <i class="fas fa-sign-in-alt me-2"></i>دخول
-          </button>
-
-          <!-- زر البصمة -->
-          <div style="position:relative;max-width:280px;margin:0 auto;">
-            <div style="height:1px;background:rgba(255,255,255,0.08);margin-bottom:12px;"></div>
-            <button onclick="adminBioLogin()" id="adminBioBtn"
-                    style="width:100%;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);
-                           color:#a5b4fc;padding:9px 20px;border-radius:10px;
-                           font-size:0.85rem;font-weight:600;cursor:pointer;">
-              <i class="fas fa-fingerprint me-2" style="font-size:1rem;"></i>دخول بالبصمة
-            </button>
-          </div>
-        </div>
-
-        <!-- ── لوحة التحكم (بعد الدخول) ── -->
+        <!-- ── لوحة التحكم ── -->
         <div id="adminDashboard" style="display:none;">
 
           <!-- شريط الأدوات -->
@@ -6798,11 +6751,6 @@ async function executeResetSingle() {
                     style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.4);
                            color:#a5b4fc;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:0.8rem;">
               <i class="fas fa-sync-alt me-1"></i>تحديث
-            </button>
-            <button onclick="adminRegisterBio()"
-                    style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);
-                           color:#6ee7b7;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:0.8rem;">
-              <i class="fas fa-fingerprint me-1"></i>تسجيل البصمة
             </button>
             <!-- ← أزرار تحميل/استعراض ملفات المشروع -->
             <button onclick="adminDownloadProject()" id="adminDlBtn"
@@ -7116,104 +7064,23 @@ function openAdminPanel() {
     bootstrap.Modal.getOrCreateInstance(el).show();
 }
 
-function _adminShowAuth() {
-    document.getElementById('adminAuthScreen').style.display = '';
-    document.getElementById('adminDashboard').style.display = 'none';
-    document.getElementById('adminAuthBadge').style.display = 'none';
-    _adminAuthed = false;
-}
+// شاشة المصادقة (كلمة المرور والبصمة) أُزيلت بالكامل بطلب المستخدم — اللوحة تُفتح مباشرةً دون أي تحقق.
+function _adminShowAuth() { _adminShowDash(); }
 
 function _adminShowDash() {
-    const authScr = document.getElementById('adminAuthScreen');
-    const dash    = document.getElementById('adminDashboard');
-    const badge   = document.getElementById('adminAuthBadge');
-    if (authScr) authScr.style.display = 'none';
-    if (dash)    dash.style.display    = 'block';
-    if (badge)   badge.style.display   = 'inline-block';
+    const dash  = document.getElementById('adminDashboard');
+    const badge = document.getElementById('adminAuthBadge');
+    if (dash)  dash.style.display  = 'block';
+    if (badge) badge.style.display = 'inline-block';
     _adminAuthed = true;
     try { adminLoadUsers();   } catch(e) {}
     try { adminLoadCardData(); } catch(e) {}
     try { adminPromoLoad();    } catch(e) {}
 }
 
-function _adminSetMsg(msg, ok) {
-    const el = document.getElementById('adminAuthMsg');
-    el.style.display = '';
-    el.innerHTML = `<div style="background:${ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};
-                                border:1px solid ${ok ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'};
-                                color:${ok ? '#6ee7b7' : '#fca5a5'};padding:7px 12px;
-                                border-radius:8px;font-size:0.8rem;">${msg}</div>`;
-    setTimeout(() => { el.style.display = 'none'; }, 3000);
-}
-
-async function adminDoLogin() {
-    const pin = document.getElementById('adminPinInput').value;
-    if (!pin) { _adminSetMsg('❌ أدخل كلمة المرور', false); return; }
-    const btn = document.getElementById('adminLoginBtn');
-    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>جاري...';
-    try {
-        const r = await fetch('/admin/api/login', {
-            method: 'POST', credentials: 'same-origin',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({username:'Anwer', password: pin})
-        });
-        const d = await r.json();
-        if (d.success) {
-            _adminSetMsg('✅ تم الدخول بنجاح', true);
-            setTimeout(_adminShowDash, 600);
-        } else {
-            _adminSetMsg('❌ ' + (d.message || 'كلمة مرور خاطئة'), false);
-        }
-    } catch(e) { _adminSetMsg('❌ خطأ في الاتصال', false); }
-    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>دخول'; }
-}
-
-async function adminBioLogin() {
-    const did = localStorage.getItem('deviceId');
-    const bt  = localStorage.getItem('biometricToken');
-    if (!did || !bt) { _adminSetMsg('❌ لم تسجّل بصمتك بعد — استخدم كلمة المرور أولاً', false); return; }
-    try {
-        const r = await fetch('/admin/api/biometric/login', {
-            method:'POST', credentials:'same-origin',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({device_id: did, biometric_token: bt})
-        });
-        const d = await r.json();
-        if (d.success) { _adminSetMsg('✅ تم الدخول بالبصمة', true); setTimeout(_adminShowDash, 500); }
-        else _adminSetMsg('❌ ' + (d.message || 'فشل التحقق'), false);
-    } catch(e) { _adminSetMsg('❌ خطأ في الاتصال', false); }
-}
-
 async function adminDoLogout() {
     await fetch('/admin/api/logout', {method:'POST', credentials:'same-origin'});
-    document.getElementById('adminPinInput').value = '';
-    _adminShowAuth();
-}
-
-function adminRegisterBio() {
-    let did = localStorage.getItem('deviceId');
-    if (!did) {
-        did = (typeof crypto.randomUUID === 'function')
-              ? crypto.randomUUID()
-              : 'dev-' + Date.now();
-        localStorage.setItem('deviceId', did);
-    }
-    const bt = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                    .map(b => b.toString(16).padStart(2,'0')).join('');
-    fetch('/admin/api/biometric/register', {
-        method:'POST', credentials:'same-origin',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({device_id: did, biometric_token: bt})
-    }).then(r => r.json()).then(d => {
-        if (d.success) {
-            localStorage.setItem('biometricToken', bt);
-            if (typeof showAlert === 'function') showAlert('✅ تم تسجيل البصمة بنجاح', 'success');
-            else alert('✅ تم تسجيل البصمة');
-        } else {
-            if (typeof showAlert === 'function') showAlert('❌ ' + d.message, 'danger');
-            else alert('❌ ' + d.message);
-        }
-    }).catch(() => alert('❌ خطأ في الاتصال'));
+    _adminShowDash();
 }
 
 function adminDownloadProject() {
@@ -7543,15 +7410,12 @@ async function adminToggleBlock(slot, blocked) {
     adminLoadUsers();
 }
 
-// تحقق من `/admin/api/check` عند فتح المودال
+// كلمة المرور والبصمة أُزيلتا بالكامل — اللوحة تُفتح مباشرةً عند فتح المودال دون أي تحقق
 document.addEventListener('DOMContentLoaded', function() {
     const el = document.getElementById('adminPanelModal');
     if (el) {
         el.addEventListener('show.bs.modal', function() {
-            fetch('/admin/api/check', {credentials:'same-origin'})
-                .then(r => r.json())
-                .then(d => { if (d.authenticated) _adminShowDash(); else _adminShowAuth(); })
-                .catch(() => _adminShowAuth());
+            _adminShowDash();
         });
     }
 });

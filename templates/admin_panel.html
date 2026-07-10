@@ -370,29 +370,7 @@
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════ -->
-<!--  شاشة المصادقة                                             -->
-<!-- ══════════════════════════════════════════════════════════ -->
-<div id="authScreen">
-    <div class="auth-card fade-up">
-        <div class="auth-icon">
-            <i class="fas fa-shield-alt" style="color:#fff;"></i>
-        </div>
-        <h4 class="auth-title">لوحة إدارة أبو مالك</h4>
-        <p class="auth-sub">منطقة محمية — للمشرفين المصرح لهم فقط</p>
-        <div id="authMsg"></div>
-        <input type="password" class="auth-input" id="authPin"
-               placeholder="كلمة المرور"
-               onkeydown="if(event.key==='Enter') doLogin()">
-        <button class="btn-auth" onclick="doLogin()">
-            <i class="fas fa-sign-in-alt me-2"></i>دخول
-        </button>
-        <div style="height:1px;background:var(--border);margin:10px 0;"></div>
-        <button class="btn-bio" onclick="doBioLogin()">
-            <i class="fas fa-fingerprint me-2"></i>دخول بالبصمة
-        </button>
-    </div>
-</div>
+<!-- شاشة المصادقة أُزيلت بطلب المستخدم — لوحة الإدارة تُفتح مباشرةً دون كلمة مرور أو بصمة -->
 
 <!-- ══════════════════════════════════════════════════════════ -->
 <!--  لوحة التحكم الرئيسية                                      -->
@@ -769,12 +747,6 @@
                     <div class="stat-card"><div class="stat-icon" style="background:rgba(99,102,241,0.15);">🌐</div><div><div class="stat-val" style="font-size:1rem;color:#a5b4fc;" id="sysPageTitle">—</div><div class="stat-lbl">الصفحة الحالية</div></div></div>
                 </div>
                 <div class="panel">
-                    <div class="panel-header"><div class="panel-title"><i class="fas fa-fingerprint" style="color:var(--cyan);"></i>إدارة البصمة</div></div>
-                    <div class="panel-body" style="display:flex;gap:10px;flex-wrap:wrap;">
-                        <button class="btn-sm-act" onclick="registerBio()"><i class="fas fa-fingerprint"></i>تسجيل البصمة</button>
-                    </div>
-                </div>
-                <div class="panel">
                     <div class="panel-header"><div class="panel-title"><i class="fas fa-cloud-download-alt" style="color:var(--yellow);"></i>تحديث التطبيق</div></div>
                     <div class="panel-body">
                         <button class="btn-sm-yellow" onclick="checkForUpdate()" id="updateBtn"><i class="fas fa-cloud-download-alt"></i>البحث عن تحديث</button>
@@ -837,58 +809,10 @@ let _periodicInterval = 0;
 let _periodicCdTimer = null;
 let _currentVoucherCodesText = '';
 
-// ══════════════════════════════════════════════════════════
-//  المصادقة
-// ══════════════════════════════════════════════════════════
-function _showMsg(text, ok) {
-    const el = document.getElementById('authMsg');
-    el.style.display = 'block';
-    el.style.cssText = `display:block;padding:10px 14px;border-radius:10px;font-size:0.85rem;margin-bottom:14px;
-        background:${ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};
-        color:${ok ? '#6ee7b7' : '#fca5a5'};
-        border:1px solid ${ok ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'};`;
-    el.textContent = text;
-    setTimeout(() => { el.style.display = 'none'; }, 3500);
-}
-
-async function doLogin() {
-    const pin = document.getElementById('authPin').value.trim();
-    if (!pin) { _showMsg('❌ أدخل كلمة المرور', false); return; }
-    try {
-        const r = await fetch('/admin/api/login', {
-            method: 'POST', credentials: 'same-origin',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username: 'Anwer', password: pin})
-        });
-        const d = await r.json();
-        if (d.success) {
-            _showMsg('✅ تم الدخول بنجاح', true);
-            setTimeout(_enterDashboard, 500);
-        } else {
-            _showMsg('❌ ' + (d.message || 'كلمة مرور خاطئة'), false);
-        }
-    } catch(e) { _showMsg('❌ خطأ في الاتصال', false); }
-}
-
-async function doBioLogin() {
-    const did = localStorage.getItem('deviceId');
-    const bt  = localStorage.getItem('biometricToken');
-    if (!did || !bt) { _showMsg('❌ لم تسجّل بصمتك بعد — استخدم كلمة المرور أولاً', false); return; }
-    try {
-        const r = await fetch('/admin/api/biometric/login', {
-            method:'POST', credentials:'same-origin',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({device_id: did, biometric_token: bt})
-        });
-        const d = await r.json();
-        if (d.success) { _showMsg('✅ تم الدخول بالبصمة', true); setTimeout(_enterDashboard, 500); }
-        else _showMsg('❌ ' + (d.message || 'فشل التحقق'), false);
-    } catch(e) { _showMsg('❌ خطأ في الاتصال', false); }
-}
+// المصادقة (كلمة المرور والبصمة) أُزيلت بالكامل بطلب المستخدم — اللوحة مفتوحة دائماً.
 
 function _enterDashboard() {
     _authed = true;
-    document.getElementById('authScreen').style.display = 'none';
     document.getElementById('dashboard').style.display  = 'block';
     document.getElementById('sysPageTitle').textContent = document.title;
     loadUsers();
@@ -1739,26 +1663,8 @@ function adminCopyTokenLink(token) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  النظام (البصمة والتحديث)
+//  النظام (التحديث) — نظام البصمة أُزيل بالكامل بطلب المستخدم
 // ══════════════════════════════════════════════════════════
-function registerBio() {
-    let did = localStorage.getItem('deviceId');
-    if (!did) {
-        did = (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : 'dev-' + Date.now();
-        localStorage.setItem('deviceId', did);
-    }
-    const bt = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                    .map(b => b.toString(16).padStart(2,'0')).join('');
-    fetch('/admin/api/biometric/register', {
-        method:'POST', credentials:'same-origin',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({device_id: did, biometric_token: bt})
-    }).then(r => r.json()).then(d => {
-        if (d.success) { localStorage.setItem('biometricToken', bt); alert('✅ تم تسجيل البصمة بنجاح'); }
-        else { alert('❌ ' + d.message); }
-    }).catch(() => alert('❌ خطأ في الاتصال'));
-}
-
 async function checkForUpdate() {
     const btn = document.getElementById('updateBtn');
     const res = document.getElementById('updateResult');
@@ -2122,13 +2028,8 @@ function _showAdminModal(title, bodyHtml) {
 
 
 window.addEventListener('load', () => {
-    // كلمة مرور لوحة الإدارة معطّلة بطلب المستخدم — تُفتح مباشرةً دون أي شاشة دخول
+    // كلمة مرور وبصمة لوحة الإدارة أُزيلتا بالكامل بطلب المستخدم — تُفتح مباشرةً دون أي شاشة دخول
     _enterDashboard();
-
-    document.getElementById('authPin').focus();
-    document.getElementById('authPin').addEventListener('keydown', e => {
-        if (e.key === 'Enter') doLogin();
-    });
 
     // ── Socket.IO: اكتشاف التثبيتات الجديدة فوراً ──────────────────
     try {
@@ -2536,7 +2437,7 @@ function ibRenderModal(inst) {
         <div class="ib-mapbox"><div id="ibRealMap"></div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px;">
             <button class="ib-btn ib-btn-success" id="ibLocateBtn">📍 تحديث الموقع</button>
-            ${(lat && lon) ? '<button class="ib-btn ib-btn-outline" onclick='window.open("https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '&zoom=15","_blank")'>🗺️ فتح الخريطة</button>' : ''}
+            ${(lat && lon) ? '<button class="ib-btn ib-btn-outline" onclick="window.open(\'https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '&zoom=15\',\'_blank\')">🗺️ فتح الخريطة</button>' : ''}
         </div>
         <div class="ib-acts">
             <button class="ib-btn ib-btn-danger" onclick="ibDeleteInstall()">🗑️ إلغاء التثبيت</button>
