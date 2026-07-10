@@ -168,6 +168,7 @@ try:
         save_dynamic_users,
         add_dynamic_user,
         delete_dynamic_user,
+        invalidate_dynamic_users_cache,
         load_user_accounts,
         save_user_accounts,
         authenticate_platform_user,
@@ -4011,16 +4012,18 @@ def index():
         pass
     # ────────────────────────────────────────────────────────────
     if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
-        # إذا كان user_id موجوداً في الجلسة لكن غير موجود في الذاكرة، نحاول تحديث القائمة
-        # من المصدر (ملف محلي/GitHub) قبل تخصيص فتحة جديدة — يحل مشكلة تعدد العمليات (gunicorn)
-        # ومشكلة التأخير في تزامن GitHub بعد إضافة حساب جديد.
-        if 'user_id' in session:
+        # إذا كان user_id موجوداً في الجلسة وعليه علامة حساب محدد (_predefined_user)،
+        # نحاول تحديث القائمة من المصدر قبل تخصيص فتحة جديدة.
+        # هذا يحل مشكلة تعدد العمليات (gunicorn) ومشكلة التأخير بعد إضافة حساب جديد،
+        # دون إضافة طلبات GitHub زائدة لجلسات الزوار العاديين.
+        if 'user_id' in session and session.get('_predefined_user'):
             global PREDEFINED_USERS
             PREDEFINED_USERS = load_dynamic_users()
         if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
             # مهم: لا نُسند أبداً معرّف حساب موجود مسبقاً (مثل أول حساب في PREDEFINED_USERS)
             # لزائر جديد ليس لديه جلسة — وإلا يرى بيانات وجلسة تيليجرام حساب شخص آخر بالكامل.
             # كل زائر جديد يحصل على فتحة مؤقتة فريدة خاصة به فقط.
+            session.pop('_predefined_user', None)
             session['user_id'] = allocate_new_visitor_slot()
             session.permanent = True
 
@@ -4791,6 +4794,8 @@ def api_switch_user():
                 "message": "❌ مستخدم غير صحيح"
             })
 
+        # وضع علامة _predefined_user حتى تعرف الصفحة الرئيسية أن هذا حساب محدد
+        session['_predefined_user'] = True
         old_user_id = session.get('user_id', 'user_1')
 
         if old_user_id in USERS:
@@ -14671,18 +14676,21 @@ def api_add_account_slot():
             # فشل الإنشاء فعلياً — لا نبدّل الجلسة ولا نعيد success:true، وإلا يبقى المستخدم
             # عالقاً على حساب غير موجود في القائمة (وهذا ما كان يجعل الواجهة "تضل ثابتة كما هي").
             return jsonify({"success": False, "message": _msg or "❌ فشل إنشاء الحساب"})
-        # نحدّث PREDEFINED_USERS مباشرةً بإضافة المستخدم الجديد بدلاً من إعادة التحميل
-        # من GitHub — إعادة التحميل قد تُعيد بيانات قديمة إذا لم يكتمل الرفع بعد
-        # أو إذا كان الطلب يصل لـ worker مختلف في gunicorn.
-        PREDEFINED_USERS[new_uid] = {"id": new_uid, "name": f"حساب {n}", "icon": "fas fa-user-plus", "color": _color}
+        # copy-on-write: نبني نسخة جديدة من القاموس لتجنب تعارضات الخيوط (thread-safety)
+        _new_predefined = dict(PREDEFINED_USERS)
+        _new_predefined[new_uid] = {"id": new_uid, "name": f"حساب {n}", "icon": "fas fa-user-plus", "color": _color}
+        PREDEFINED_USERS = _new_predefined
+        # إبطال الذاكرة المؤقتة فوراً حتى تُحمَّل البيانات الجديدة في الطلبات القادمة
+        invalidate_dynamic_users_cache()
         # حفظ إعدادات الحساب الحالي قبل الانتقال، تماماً كما يفعل التبديل بين الحسابات
         old_uid = session.get('user_id', 'user_1')
         if old_uid in USERS:
             _cur_settings = USERS[old_uid].get('settings', {})
             if _cur_settings:
                 save_settings(old_uid, _cur_settings)
-        # التبديل إلى الفتحة الجديدة
+        # التبديل إلى الفتحة الجديدة مع وضع علامة تدل على أنه حساب محدد مسبقاً
         session['user_id'] = new_uid
+        session['_predefined_user'] = True
         session.permanent = True
         get_or_create_user(new_uid)
         return jsonify({"success": True, "user_id": new_uid, "message": f"✅ تم إنشاء فتحة حساب {n} جديدة"})
