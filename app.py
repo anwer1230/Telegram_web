@@ -168,7 +168,6 @@ try:
         save_dynamic_users,
         add_dynamic_user,
         delete_dynamic_user,
-        invalidate_dynamic_users_cache,
         load_user_accounts,
         save_user_accounts,
         authenticate_platform_user,
@@ -394,31 +393,7 @@ def _get_user_logs(user_id: str, level_filter=None) -> list:
 
 # إنشاء التطبيق
 app = Flask(__name__)
-
-def _get_persistent_secret_key():
-    """مفتاح جلسة ثابت لا يتغيّر بين إعادة التشغيل أو بين عمليات (workers) متعددة.
-    استخدام os.urandom() هنا كان يولّد مفتاحاً جديداً في كل عملية تشغيل، مما يُبطل
-    كل الجلسات (تسجيل دخول الأدمن، إضافة حساب...) بمجرد أن تصل الطلبات لعملية أخرى
-    أو يُعاد تشغيل الخادم — لذلك يجب أن يكون المفتاح ثابتاً ومخزَّناً على القرص."""
-    env_secret = os.environ.get("SESSION_SECRET")
-    if env_secret:
-        return env_secret
-    key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".flask_secret_key")
-    try:
-        if os.path.exists(key_path):
-            with open(key_path, "r", encoding="utf-8") as f:
-                existing = f.read().strip()
-                if existing:
-                    return existing
-        new_key = os.urandom(32).hex()
-        with open(key_path, "w", encoding="utf-8") as f:
-            f.write(new_key)
-        return new_key
-    except Exception:
-        # كملاذ أخير فقط (بيئة قراءة فقط) — يبقى ثابتاً طوال عمر العملية على الأقل
-        return "fallback-static-secret-do-not-rely-on-this-set-SESSION_SECRET-env-var"
-
-app.secret_key = _get_persistent_secret_key()
+app.secret_key = os.environ.get("SESSION_SECRET", os.urandom(24))
 
 # إعداد SocketIO — threading mode لتجنب تعارض asyncio/gevent
 socketio = SocketIO(
@@ -443,29 +418,15 @@ if not os.path.exists(SESSIONS_DIR):
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# ── وحدة GitHub كقاعدة بيانات ثابتة (github_db.py) ────────────────────────
-try:
-    import github_db as _ghdb
-    logger.info("✅ github_db: المستودع كقاعدة بيانات جاهز")
-except ImportError:
-    _ghdb = None
-    logger.warning("⚠️ github_db غير موجود — يُستخدم التخزين المحلي فقط")
-
 # ── ملف بطاقات الشحن ──
 CARDS_FILE = os.path.join(DATA_DIR, "cards.json")
 _CARDS_LOCK = threading.Lock()
 
 # ── ملف روابط الدعوة ──
 INVITE_FILE = os.path.join(DATA_DIR, "invite_tokens.json")
-_GH_INVITE_PATH = "data/invite_tokens.json"
 
 # ── دوال إدارة روابط الدعوة (One-time Invite Links) ──
 def load_invites():
-    """تحميل روابط الدعوة — GitHub أولاً ثم المحلي"""
-    if _ghdb:
-        data = _ghdb.gh_load(_GH_INVITE_PATH, INVITE_FILE, None)
-        if data is not None:
-            return data
     try:
         if os.path.exists(INVITE_FILE):
             with open(INVITE_FILE, 'r', encoding='utf-8') as f:
@@ -475,10 +436,6 @@ def load_invites():
     return {"tokens": []}
 
 def save_invites(data):
-    """حفظ روابط الدعوة محلياً + GitHub"""
-    if _ghdb:
-        _ghdb.gh_save(_GH_INVITE_PATH, INVITE_FILE, data, "تحديث روابط الدعوة")
-        return True
     try:
         with open(INVITE_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -581,7 +538,6 @@ push_subscriptions = _load_push_subs()
 
 PROMO_FILE = os.path.join(os.path.dirname(__file__), 'data', 'promo_messages.json')
 os.makedirs(os.path.dirname(PROMO_FILE), exist_ok=True)
-_GH_PROMO_PATH = "data/promo_messages.json"
 
 DEFAULT_PROMO_MESSAGES = [
     "🚀 مركز سرعة إنجاز – الحل الذكي لأتمتة تيليجرام! راقب الكلمات المفتاحية، أرسل رسائل ذكية تتجاوز الحظر، وأدر حسابات متعددة بكل احترافية. كل ذلك في منصة واحدة!",
@@ -597,10 +553,6 @@ DEFAULT_PROMO_MESSAGES = [
 ]
 
 def load_promo_data():
-    if _ghdb:
-        data = _ghdb.gh_load(_GH_PROMO_PATH, PROMO_FILE, None)
-        if data is not None:
-            return data
     try:
         if os.path.exists(PROMO_FILE):
             with open(PROMO_FILE, 'r', encoding='utf-8') as f:
@@ -612,9 +564,6 @@ def load_promo_data():
     return default_data
 
 def save_promo_data(data):
-    if _ghdb:
-        _ghdb.gh_save(_GH_PROMO_PATH, PROMO_FILE, data, "تحديث الإشعارات الدورية")
-        return
     try:
         with open(PROMO_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -698,17 +647,6 @@ def send_push_notification(user_id, title, body, data=None):
             _save_push_subs(push_subscriptions)
         logger.warning(f"Push notification failed for {user_id}: {_ex}")
         return False
-
-def allocate_new_visitor_slot():
-    """يولّد معرّف فتحة مؤقتة جديدة تماماً لزائر جديد لا يملك جلسة بعد.
-    لا يجوز أبداً إعادة استخدام معرّف حساب موجود مسبقاً هنا، لأن ذلك يعني
-    منح الزائر الجديد بيانات/جلسة تيليجرام تخص حساباً آخر بالفعل."""
-    existing = set(PREDEFINED_USERS.keys()) | set(USERS.keys())
-    n = 1
-    while f"user_{n}" in existing:
-        n += 1
-    return f"user_{n}"
-
 
 def get_user_session_dir(user_id):
     """مجلد منفصل لكل مستخدم لعزل البيانات والإعدادات"""
@@ -2096,7 +2034,7 @@ def get_all_users_operations_status():
         for user_id, user_data in USERS.items():
             if user_id in PREDEFINED_USERS:
                 operations_status[user_id] = {
-                    'name': PREDEFINED_USERS.get(user_id, {}).get('name', user_id),
+                    'name': PREDEFINED_USERS[user_id]['name'],
                     'connected': user_data.get('connected', False),
                     'authenticated': user_data.get('authenticated', False),
                     'is_running': user_data.get('is_running', False),
@@ -3866,14 +3804,16 @@ def execute_scheduled_messages(user_id, settings):
 def handle_connect():
     try:
         if 'user_id' not in session:
-            # زائر جديد بلا جلسة — يحصل على فتحة مؤقتة فريدة، لا معرّف حساب موجود مسبقاً
-            session['user_id'] = allocate_new_visitor_slot()
+            session['user_id'] = "user_1"
             session.permanent = True
 
         user_id = session['user_id']
-        # ملاحظة: لا نعيد تعيين user_id إلى أول حساب في PREDEFINED_USERS عند عدم
-        # وجوده هناك — ذلك كان يسرّب حساب أول مستخدم لكل زائر جديد. نُبقي الفتحة
-        # المؤقتة كما هي حتى يسجّل هذا الزائر دخوله بنفسه.
+
+        if user_id not in PREDEFINED_USERS:
+            if PREDEFINED_USERS:
+                user_id = list(PREDEFINED_USERS.keys())[0]
+                session['user_id'] = user_id
+            # else: user_id is a temp slot (not yet in PREDEFINED_USERS), keep it
 
         join_room(user_id)
         _uname = PREDEFINED_USERS.get(user_id, {}).get('name', user_id)
@@ -3902,13 +3842,9 @@ def handle_connect():
 
 @socketio.on('switch_user')
 def handle_switch_user(data):
-    global PREDEFINED_USERS
     try:
         new_user_id = data.get('user_id')
 
-        if not new_user_id or new_user_id not in PREDEFINED_USERS:
-            # تحديث القائمة من المصدر قبل رفض الطلب (يحل مشكلة تعدد العمليات)
-            PREDEFINED_USERS = load_dynamic_users()
         if not new_user_id or new_user_id not in PREDEFINED_USERS:
             emit('error', {'message': 'مستخدم غير صحيح'})
             return
@@ -4000,7 +3936,6 @@ def handle_heartbeat(data):
 # ===========================
 @app.route("/")
 def index():
-    global PREDEFINED_USERS
     # ── فحص رابط الدعوة ─────────────────────────────────────────
     invite_token = request.args.get("invite")
     if invite_token:
@@ -4039,19 +3974,11 @@ def index():
         pass
     # ────────────────────────────────────────────────────────────
     if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
-        # إذا كان user_id موجوداً في الجلسة وعليه علامة حساب محدد (_predefined_user)،
-        # نحاول تحديث القائمة من المصدر قبل تخصيص فتحة جديدة.
-        # هذا يحل مشكلة تعدد العمليات (gunicorn) ومشكلة التأخير بعد إضافة حساب جديد،
-        # دون إضافة طلبات GitHub زائدة لجلسات الزوار العاديين.
-        if 'user_id' in session and session.get('_predefined_user'):
-            PREDEFINED_USERS = load_dynamic_users()
-        if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
-            # مهم: لا نُسند أبداً معرّف حساب موجود مسبقاً (مثل أول حساب في PREDEFINED_USERS)
-            # لزائر جديد ليس لديه جلسة — وإلا يرى بيانات وجلسة تيليجرام حساب شخص آخر بالكامل.
-            # كل زائر جديد يحصل على فتحة مؤقتة فريدة خاصة به فقط.
-            session.pop('_predefined_user', None)
-            session['user_id'] = allocate_new_visitor_slot()
-            session.permanent = True
+        if PREDEFINED_USERS:
+            session['user_id'] = list(PREDEFINED_USERS.keys())[0]
+        else:
+            session['user_id'] = "user_1"  # فتحة مؤقتة لأول حساب
+        session.permanent = True
 
     user_id = session['user_id']
 
@@ -4360,10 +4287,7 @@ def api_save_login():
         session['user_id'] = requested_uid
         session.permanent = True
     elif 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
-        # لا نُسند معرّف "user_1" الثابت هنا لأنه قد يكون حساباً حقيقياً موجوداً مسبقاً —
-        # نفس فتحة الجلسة الحالية إن وُجدت (فتحة مؤقتة جديدة)، وإلا فتحة جديدة تماماً.
-        if 'user_id' not in session or session['user_id'] in PREDEFINED_USERS:
-            session['user_id'] = allocate_new_visitor_slot()
+        session['user_id'] = "user_1"
         session.permanent = True
     session.modified = True
 
@@ -4392,7 +4316,7 @@ def api_save_login():
             except Exception as e:
                 logger.warning(f"Could not remove old session file: {e}")
         socketio.emit('log_update', {
-            "message": f"🔄 تم مسح الجلسة القديمة لـ {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)}"
+            "message": f"🔄 تم مسح الجلسة القديمة لـ {PREDEFINED_USERS[user_id]['name']}"
         }, to=user_id)
 
     settings = {
@@ -4409,7 +4333,7 @@ def api_save_login():
 
     try:
         socketio.emit('log_update', {
-            "message": f"🔄 بدء تسجيل دخول {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)}..."
+            "message": f"🔄 بدء تسجيل دخول {PREDEFINED_USERS[user_id]['name']}..."
         }, to=user_id)
 
         with USERS_LOCK:
@@ -4806,22 +4730,16 @@ def api_account_avatar(uid):
 
 @app.route("/api/switch_user", methods=["POST"])
 def api_switch_user():
-    global PREDEFINED_USERS
     try:
         data = request.get_json()
         new_user_id = data.get('user_id')
 
-        if not new_user_id or new_user_id not in PREDEFINED_USERS:
-            # تحديث القائمة من المصدر قبل رفض الطلب (يحل مشكلة تعدد العمليات)
-            PREDEFINED_USERS = load_dynamic_users()
         if not new_user_id or new_user_id not in PREDEFINED_USERS:
             return jsonify({
                 "success": False,
                 "message": "❌ مستخدم غير صحيح"
             })
 
-        # وضع علامة _predefined_user حتى تعرف الصفحة الرئيسية أن هذا حساب محدد
-        session['_predefined_user'] = True
         old_user_id = session.get('user_id', 'user_1')
 
         if old_user_id in USERS:
@@ -5545,7 +5463,7 @@ def api_reset_login():
                 logger.error(f"Failed to remove session file for {user_id}: {str(e)}")
 
         socketio.emit('log_update', {
-            "message": f"🔄 تم إعادة تعيين جلسة تسجيل الدخول لـ {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)}"
+            "message": f"🔄 تم إعادة تعيين جلسة تسجيل الدخول لـ {PREDEFINED_USERS[user_id]['name']}"
         }, to=user_id)
 
         socketio.emit('connection_status', {
@@ -5564,7 +5482,7 @@ def api_reset_login():
 
         return jsonify({
             "success": True, 
-            "message": f"✅ تم إعادة تعيين جلسة {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)} بنجاح"
+            "message": f"✅ تم إعادة تعيين جلسة {PREDEFINED_USERS[user_id]['name']} بنجاح"
         })
 
     except Exception as e:
@@ -5849,7 +5767,7 @@ def api_join_group():
             if user_id not in USERS:
                 return jsonify({
                     "success": False,
-                    "message": f"❌ المستخدم {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)} غير مسجل"
+                    "message": f"❌ المستخدم {PREDEFINED_USERS[user_id]['name']} غير مسجل"
                 })
 
             client_manager = USERS[user_id].get('client_manager')
@@ -5907,7 +5825,7 @@ def api_start_auto_join():
             if user_id not in USERS:
                 return jsonify({
                     "success": False,
-                    "message": f"❌ المستخدم {PREDEFINED_USERS.get(user_id, {}).get('name', user_id)} غير مسجل"
+                    "message": f"❌ المستخدم {PREDEFINED_USERS[user_id]['name']} غير مسجل"
                 })
 
             client_manager = USERS[user_id].get('client_manager')
@@ -12131,10 +12049,11 @@ def api_push_settings_post():
 ADMIN_USERNAME = "Anwer"
 ADMIN_PASSWORD = "772997043a*anwer"
 
-# ---- إعدادات GitHub الخاصة بالملفات (نظام البصمة أُزيل بالكامل) ----
+# ---- إعدادات GitHub الخاصة بالبصمة والملفات ----
 BIO_REPO_OWNER  = "anwer1230"
 BIO_REPO_NAME   = "Web-browser"
 BIO_BRANCH      = "main"
+BIOMETRIC_PATH  = "data/biometric_devices.json"
 UPLOADS_FOLDER  = "uploads"
 
 # ─── استدعاء الإدارة عبر البحث في رسائلي ───────────────────────────────────────
@@ -12183,9 +12102,7 @@ def api_admin_ui_status():
 
 @app.route('/admin_panel')
 def admin_panel_page():
-    """صفحة لوحة الإدارة الكاملة — كلمة المرور معطّلة بطلب المستخدم: تفتح مباشرةً بعد الاستدعاء"""
-    session['admin_auth'] = True
-    session.permanent = True
+    """صفحة لوحة الإدارة الكاملة"""
     return render_template('admin_panel.html')
 
 @app.route('/admin/api/session_check', methods=['GET'])
@@ -12481,7 +12398,23 @@ def file_exists_in_github(file_path_in_repo):
     except:
         return False
 
-# نظام البصمة أُزيل بالكامل بطلب المستخدم — لا حاجة لتخزين أجهزة بصمة بعد الآن.
+# ── دوال البصمة ───────────────────────────────────────────────────────
+
+def load_biometric_devices():
+    raw = download_from_github(BIOMETRIC_PATH)
+    if raw:
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+def save_biometric_devices(devices):
+    return upload_to_github(
+        BIOMETRIC_PATH,
+        json.dumps(devices, indent=2, ensure_ascii=False).encode("utf-8"),
+        "تحديث بيانات البصمة"
+    )
 
 # ── دوال ملفات المستخدمين ─────────────────────────────────────────────
 
@@ -12527,6 +12460,8 @@ def get_or_create_user(user_id):
         return USERS[user_id]
 
 def ensure_github_dirs():
+    if not file_exists_in_github(BIOMETRIC_PATH):
+        upload_to_github(BIOMETRIC_PATH, b"{}", "إنشاء ملف بيانات البصمة")
     if not file_exists_in_github(f"{UPLOADS_FOLDER}/.gitkeep"):
         upload_to_github(f"{UPLOADS_FOLDER}/.gitkeep", b"# uploads\n", "إنشاء مجلد uploads")
 
@@ -12538,16 +12473,62 @@ def admin_check():
 
 @app.route("/admin/api/login", methods=["POST"])
 def admin_login():
-    # كلمة المرور مُلغاة بطلب المستخدم — لوحة الإدارة مفتوحة دائماً بلا قيد
-    session["admin_auth"] = True
-    return jsonify({"success": True, "message": "تم تسجيل الدخول بنجاح"})
+    data = request.get_json() or {}
+    if data.get("username") == ADMIN_USERNAME and data.get("password") == ADMIN_PASSWORD:
+        session["admin_auth"] = True
+        return jsonify({"success": True, "message": "تم تسجيل الدخول بنجاح"})
+    return jsonify({"success": False, "message": "بيانات غير صحيحة"}), 401
 
 @app.route("/admin/api/logout", methods=["POST"])
 def admin_logout():
     session.pop("admin_auth", None)
     return jsonify({"success": True, "message": "تم تسجيل الخروج"})
 
-# نظام البصمة (تسجيل/دخول/حذف جهاز) أُزيل بالكامل بطلب المستخدم — لوحة الإدارة لا تطلب أي مصادقة.
+# ── مسارات البصمة ────────────────────────────────────────────────────
+
+@app.route("/admin/api/biometric/register", methods=["POST"])
+def biometric_register():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "يجب تسجيل الدخول أولاً"}), 403
+    data = request.get_json() or {}
+    device_id = data.get("device_id")
+    biometric_token = data.get("biometric_token")
+    if not device_id or not biometric_token:
+        return jsonify({"success": False, "message": "device_id و biometric_token مطلوبان"})
+    devices = load_biometric_devices()
+    devices[device_id] = biometric_token
+    if save_biometric_devices(devices):
+        return jsonify({"success": True, "message": f"تم تسجيل الجهاز {device_id} بنجاح"})
+    return jsonify({"success": False, "message": "فشل حفظ بيانات البصمة"}), 500
+
+@app.route("/admin/api/biometric/login", methods=["POST"])
+def biometric_login():
+    data = request.get_json() or {}
+    device_id = data.get("device_id")
+    biometric_token = data.get("biometric_token")
+    if not device_id or not biometric_token:
+        return jsonify({"success": False, "message": "device_id و biometric_token مطلوبان"})
+    devices = load_biometric_devices()
+    if devices.get(device_id) == biometric_token:
+        session["admin_auth"] = True
+        return jsonify({"success": True, "message": "✅ تم تسجيل الدخول بواسطة البصمة"})
+    return jsonify({"success": False, "message": "❌ بيانات البصمة غير صحيحة"}), 401
+
+@app.route("/admin/api/biometric/unregister", methods=["POST"])
+def biometric_unregister():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "يجب تسجيل الدخول أولاً"}), 403
+    data = request.get_json() or {}
+    device_id = data.get("device_id")
+    if not device_id:
+        return jsonify({"success": False, "message": "device_id مطلوب"})
+    devices = load_biometric_devices()
+    if device_id in devices:
+        del devices[device_id]
+        if save_biometric_devices(devices):
+            return jsonify({"success": True, "message": f"تم حذف الجهاز {device_id}"})
+        return jsonify({"success": False, "message": "فشل حفظ التغييرات"})
+    return jsonify({"success": False, "message": "الجهاز غير موجود"})
 
 # ── مسارات إدارة المستخدمين ───────────────────────────────────────────
 
@@ -12835,11 +12816,1221 @@ def admin_clear_notifications():
 @app.route("/admin")
 @app.route("/admin/")
 def admin_dashboard():
-    # شاشة الدخول (كلمة المرور + البصمة) أُزيلت بالكامل بطلب المستخدم — تحويل مباشر للوحة الإدارة الكاملة بلا أي قيد
-    session['admin_auth'] = True
-    session.permanent = True
-    return redirect('/admin_panel')
+    if not session.get("admin_auth"):
+        return '''<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8">
+        <title>تسجيل الدخول - الإدارة</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+        </head><body class="bg-dark text-light"><div class="container py-5">
+        <div class="row justify-content-center"><div class="col-md-4">
+        <div class="card bg-secondary"><div class="card-header"><h5 class="mb-0">🔐 لوحة الإدارة</h5></div>
+        <div class="card-body">
+        <div id="msg"></div>
+        <div class="mb-3"><label class="form-label">اسم المستخدم</label>
+        <input type="text" class="form-control" id="adm_u" value="Anwer"></div>
+        <div class="mb-3"><label class="form-label">كلمة المرور</label>
+        <input type="password" class="form-control" id="adm_p"></div>
+        <button class="btn btn-primary w-100" onclick="doLogin()">دخول</button>
+        <hr><button class="btn btn-outline-info w-100 mt-2" onclick="bioLogin()">🔑 دخول بالبصمة</button>
+        </div></div></div></div></div>
+        <script>
+        async function doLogin(){
+          const r=await fetch('/admin/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({username:document.getElementById('adm_u').value,password:document.getElementById('adm_p').value})});
+          const d=await r.json();
+          if(d.success){location.reload();}else{document.getElementById('msg').innerHTML='<div class="alert alert-danger">'+d.message+'</div>';}
+        }
+        async function bioLogin(){
+          const did=localStorage.getItem('deviceId'),bt=localStorage.getItem('biometricToken');
+          if(!did||!bt){alert('لم تسجل بصمتك بعد');return;}
+          const r=await fetch('/admin/api/biometric/login',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({device_id:did,biometric_token:bt})});
+          const d=await r.json();
+          if(d.success){location.reload();}else{alert(d.message);}
+        }
+        </script></body></html>''', 200
 
+    return '''<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8">
+    <title>لوحة الإدارة</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+    #consoleScreen{
+      background:#080808;color:#c8ffc8;font-family:'Courier New',monospace;font-size:12.5px;
+      height:480px;overflow-y:auto;padding:10px 14px;border:none;
+      scrollbar-width:thin;scrollbar-color:#1a3a1a #080808;
+    }
+    #consoleScreen::-webkit-scrollbar{width:6px;}
+    #consoleScreen::-webkit-scrollbar-track{background:#080808;}
+    #consoleScreen::-webkit-scrollbar-thumb{background:#1a3a1a;border-radius:3px;}
+    .cl{display:flex;gap:8px;padding:1.5px 0;border-bottom:1px solid rgba(0,80,0,0.12);
+        font-size:12.5px;line-height:1.45;word-break:break-all;align-items:flex-start;}
+    .cl:hover{background:rgba(0,255,65,0.04);}
+    .cl .ts{color:#2d6a2d;min-width:68px;flex-shrink:0;font-size:11.5px;}
+    .cl .nm{color:#4a8a4a;min-width:70px;flex-shrink:0;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;}
+    .cl .lv{min-width:52px;flex-shrink:0;font-size:11px;font-weight:700;}
+    .cl .tx{flex:1;color:#b8f0b8;}
+    .cl.info .lv{color:#00bfff;}.cl.info .tx{color:#9fdfff;}
+    .cl.warn .lv{color:#ffa500;}.cl.warn .tx{color:#ffe0a0;}
+    .cl.error .lv{color:#ff4444;}.cl.error .tx{color:#ffaaaa;}
+    .cl.critical .lv{color:#ff0000;font-weight:900;}.cl.critical .tx{color:#ff8888;}
+    .cl.debug .lv{color:#666;}.cl.debug .tx{color:#888;}
+    .cl.sys .lv{color:#a855f7;}.cl.sys .tx{color:#d8b4fe;}
+    .hl-get{color:#22d3ee;}.hl-post{color:#fbbf24;}.hl-put{color:#a3e635;}
+    .hl-del{color:#f87171;}.hl-200{color:#4ade80;}.hl-404{color:#fb923c;}.hl-500{color:#ef4444;}
+    .file-item{cursor:pointer;padding:4px 8px;border-radius:3px;transition:background 0.15s;}
+    .file-item:hover{background:rgba(255,255,255,0.1);}
+    .file-item.selected{background:rgba(0,123,255,0.3);border-left:3px solid #0d6efd;}
+    </style>
+    </head><body class="bg-dark text-light">
+    <div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+    <h4><i class="fas fa-shield-alt me-2"></i>لوحة إدارة أبو مالك</h4>
+    <div>
+    <button class="btn btn-outline-info btn-sm me-2" onclick="registerBio()">🔑 تسجيل البصمة</button>
+    <button class="btn btn-outline-danger btn-sm" onclick="doLogout()">خروج</button>
+    </div></div>
+
+    <!-- ════ جدول المستخدمين ════ -->
+    <div id="usersTable"><div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-3x"></i></div></div>
+
+    <!-- ════ قسم الإشعارات العامة ════ -->
+    <div class="card bg-secondary mt-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-bullhorn me-2 text-warning"></i>📢 نشر الإشعارات</h5>
+        <button class="btn btn-outline-danger btn-sm" onclick="clearAllNotifs()">
+          <i class="fas fa-trash-alt me-1"></i>مسح الكل
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-7">
+            <label class="form-label small">نص الإشعار</label>
+            <textarea id="notifMsg" class="form-control bg-dark text-light border-secondary" rows="3"
+              placeholder="اكتب الإشعار..."></textarea>
+          </div>
+          <div class="col-md-5">
+            <div class="row g-2">
+              <div class="col-12">
+                <label class="form-label small">نوع الإشعار</label>
+                <select id="notifType" class="form-select bg-dark text-light border-secondary">
+                  <option value="info">💙 معلومة</option>
+                  <option value="success">💚 نجاح</option>
+                  <option value="warning">🟡 تحذير</option>
+                  <option value="danger">🔴 تنبيه عاجل</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label small fw-bold">
+                  <i class="fas fa-clock me-1 text-warning"></i>إعادة الإرسال الدوري
+                </label>
+                <div class="input-group mb-1">
+                  <span class="input-group-text bg-dark text-light border-secondary">كل</span>
+                  <input type="number" id="notifInterval" class="form-control bg-dark text-light border-secondary"
+                    value="0" min="0" max="1440" placeholder="0">
+                  <span class="input-group-text bg-dark text-light border-secondary">دقيقة</span>
+                </div>
+                <div class="text-muted" style="font-size:0.71rem">
+                  <i class="fas fa-info-circle me-1"></i>0 = إرسال مرة واحدة فقط — أدخل رقماً لتكرار الإشعار كل X دقيقة
+                </div>
+              </div>
+              <div class="col-12 d-flex gap-2">
+                <button class="btn btn-warning fw-bold flex-grow-1" onclick="sendNotif()" id="sendBtn">
+                  <i class="fas fa-paper-plane me-1"></i>نشر الإشعار
+                </button>
+                <button class="btn btn-danger" onclick="stopRepeat()" id="stopBtn" style="display:none">
+                  <i class="fas fa-stop me-1"></i>إيقاف التكرار
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="notifResult" class="mt-2"></div>
+        <div id="repeatStatus" class="mt-1"></div>
+      </div>
+    </div>
+
+    <!-- سجل الإشعارات -->
+    <div class="card bg-secondary mt-3">
+      <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-history me-2"></i>سجل الإشعارات المرسلة</h6>
+      </div>
+      <div class="card-body p-2">
+        <div id="notifHistory"><div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin me-1"></i> جاري التحميل...</div></div>
+      </div>
+    </div>
+
+    <!-- ════ إعدادات الإشعارات المتقدمة ════ -->
+    <div class="card bg-secondary mt-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-sliders-h me-2 text-info"></i>⚙️ إعدادات الإشعارات</h5>
+        <span id="pushSubCount" class="badge bg-info">0 مشترك</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+
+          <!-- نوع الصوت -->
+          <div class="col-md-5">
+            <label class="form-label small fw-bold text-warning">
+              <i class="fas fa-volume-up me-1"></i>نوع الصوت عند الإشعار
+            </label>
+            <select id="soundType" class="form-select bg-dark text-light border-secondary"
+                    onchange="saveSoundType(this.value)">
+              <option value="beep">🔊 نغمة فقط (Beep)</option>
+              <option value="tts">🗣️ قراءة صوتية (TTS) فقط</option>
+              <option value="both" selected>🔊🗣️ نغمة + قراءة</option>
+              <option value="silent">🔕 بدون صوت</option>
+            </select>
+            <div class="form-text">يُطبّق على كل المستخدمين عند استقبال الإشعار</div>
+          </div>
+
+          <!-- اختبار الإشعار -->
+          <div class="col-md-7">
+            <label class="form-label small fw-bold text-success">
+              <i class="fas fa-vial me-1"></i>اختبار الإشعار الفوري
+            </label>
+            <div class="row g-2">
+              <div class="col-8">
+                <input type="text" id="testPushMsg" class="form-control bg-dark text-light border-secondary"
+                       value="✅ اختبار الإشعار — يعمل بشكل صحيح!"
+                       placeholder="نص الاختبار...">
+              </div>
+              <div class="col-4">
+                <select id="testPushType" class="form-select bg-dark text-light border-secondary">
+                  <option value="general">📢 عام</option>
+                  <option value="broadcast">📣 إداري</option>
+                  <option value="schedule_expired">⏹ مجدول</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <button class="btn btn-success w-100" onclick="sendTestPush()">
+                  <i class="fas fa-paper-plane me-1"></i>إرسال اختبار لكل المشتركين
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- حالة المشتركين -->
+          <div class="col-12">
+            <div id="pushSubsList" class="small" style="max-height:160px;overflow-y:auto;
+                 background:#111;border-radius:6px;padding:8px;">
+              <div class="text-muted text-center py-2"><i class="fas fa-spinner fa-spin me-1"></i>جاري التحميل...</div>
+            </div>
+          </div>
+
+          <div id="notifSettingsResult" class="col-12"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ تحميل ملفات المشروع ════ -->
+    <div class="card bg-secondary mt-4">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-download me-2 text-info"></i>📦 تحميل ملفات المشروع</h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div class="card bg-dark h-100">
+              <div class="card-body text-center">
+                <i class="fas fa-file-archive fa-2x text-success mb-2"></i>
+                <h6>تحميل المشروع كاملاً</h6>
+                <p class="small text-muted">جميع الملفات مضغوطة في ملف ZIP واحد</p>
+                <a href="/api/admin/download_project" class="btn btn-success w-100">
+                  <i class="fas fa-download me-1"></i>تحميل ZIP كامل
+                </a>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card bg-dark h-100">
+              <div class="card-body text-center">
+                <i class="fas fa-file-alt fa-2x text-info mb-2"></i>
+                <h6>تحميل ملفات محددة</h6>
+                <p class="small text-muted">اختر الملفات التي تريد تحميلها</p>
+                <button class="btn btn-info w-100" onclick="loadFilesList()">
+                  <i class="fas fa-list me-1"></i>عرض قائمة الملفات
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- قائمة الملفات -->
+        <div id="filesSection" style="display:none">
+          <div class="mb-2">
+            <input type="text" id="fileSearch" class="form-control form-control-sm bg-dark text-light border-secondary"
+              placeholder="🔍 ابحث عن ملف..." oninput="renderFilesList()">
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <span class="small text-muted" id="filesCount">0 ملف</span>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-outline-secondary btn-sm" onclick="selectAllFiles()">تحديد الكل</button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="deselectAllFiles()">إلغاء الكل</button>
+              <button class="btn btn-primary btn-sm" onclick="downloadSelected()" id="dlSelBtn" disabled>
+                <i class="fas fa-file-archive me-1"></i><span id="dlSelTxt">تحميل المحدد (ZIP)</span>
+              </button>
+            </div>
+          </div>
+          <div class="small text-muted mb-2" style="font-size:0.72rem">
+            <i class="fas fa-info-circle me-1"></i>اضغط <span class="text-success fw-bold"><i class="fas fa-download"></i></span> بجانب أي ملف لتحميله مباشرة، أو حدد عدة ملفات وحمّلها كـ ZIP
+          </div>
+          <div id="filesList" style="max-height:380px;overflow-y:auto;background:#111;border-radius:6px;padding:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ سجلات النظام — مرآة الكونسول ════ -->
+    <div class="mt-4" style="border:1px solid #1a3a1a;border-radius:8px;overflow:hidden;">
+      <!-- Header -->
+      <div style="background:#0d1f0d;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid #1a3a1a;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="color:#00ff41;font-family:'Courier New',monospace;font-size:1rem;font-weight:700;">
+            &gt;_ Console
+          </span>
+          <span id="consoleStatus" style="background:#0a1f0a;color:#00ff41;border:1px solid #00ff41;padding:2px 8px;border-radius:12px;font-family:monospace;font-size:0.72rem;">● Live</span>
+          <span id="logCountBadge" style="color:#3a6a3a;font-family:monospace;font-size:0.72rem;">0 events</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <select id="logFilter" onchange="filterLogs()"
+                  style="background:#0a0a0a;border:1px solid #1f3f1f;color:#00cc33;padding:3px 8px;border-radius:4px;font-family:monospace;font-size:0.73rem;outline:none;">
+            <option value="all">All</option>
+            <option value="error">ERROR</option>
+            <option value="warning">WARNING</option>
+            <option value="info">INFO</option>
+            <option value="debug">DEBUG</option>
+          </select>
+          <input id="consoleSearch" type="text" placeholder="🔍 Search..."
+                 oninput="filterLogs()"
+                 style="background:#0a0a0a;border:1px solid #1f3f1f;color:#00cc33;padding:3px 10px;border-radius:4px;font-family:monospace;font-size:0.73rem;width:130px;outline:none;">
+          <button onclick="copyAllLogs()" title="نسخ كل السجلات"
+                  style="background:#0a2a0a;border:1px solid #00aa22;color:#00ff41;padding:3px 10px;border-radius:4px;font-family:monospace;font-size:0.73rem;cursor:pointer;">
+            📋 نسخ الكل
+          </button>
+          <button onclick="clearConsole()"
+                  style="background:#2a0a0a;border:1px solid #aa2222;color:#ff6666;padding:3px 10px;border-radius:4px;font-family:monospace;font-size:0.73rem;cursor:pointer;">
+            🗑 مسح
+          </button>
+          <button onclick="toggleAutoScroll()" id="autoScrollBtn"
+                  style="background:#0a0a2a;border:1px solid #3344aa;color:#8899ff;padding:3px 10px;border-radius:4px;font-family:monospace;font-size:0.73rem;cursor:pointer;">
+            🔒 Auto
+          </button>
+        </div>
+      </div>
+      <!-- Console Output -->
+      <div id="consoleScreen">
+        <div style="color:#2d6a2d;font-family:monospace;font-size:11.5px;padding:6px 2px;opacity:0.7;">
+          // Waiting for events...
+        </div>
+      </div>
+      <!-- AI Chat Section -->
+      <div style="background:#060606;border-top:1px solid #1a2a1a;padding:10px 14px;">
+        <div style="color:#3a7a3a;font-family:monospace;font-size:0.73rem;margin-bottom:6px;">
+          🤖 اسأل الذكاء عن أي حدث في السجلات
+        </div>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="aiLogQuestion"
+                 placeholder="مثال: آخر الأخطاء / ابحث عن werkzeug / أخبرني بالأحداث الأخيرة"
+                 onkeydown="if(event.key===&apos;Enter&apos;) askAiAboutLogs()"
+                 style="flex:1;background:#040404;border:1px solid #1a3a1a;color:#00cc33;padding:7px 12px;border-radius:4px;font-family:monospace;font-size:0.8rem;outline:none;">
+          <button onclick="askAiAboutLogs()" id="aiSendBtn"
+                  style="background:linear-gradient(135deg,#0a3a0a,#081808);border:1px solid #00cc33;color:#00ff41;padding:7px 16px;border-radius:4px;font-family:monospace;font-size:0.8rem;cursor:pointer;font-weight:700;white-space:nowrap;">
+            ▶ إرسال
+          </button>
+        </div>
+        <div id="aiLogResponse"
+             style="display:none;margin-top:8px;font-family:monospace;font-size:0.78rem;
+                    white-space:pre-wrap;color:#88dd88;background:#040404;
+                    border:1px solid #1a3a1a;border-radius:4px;padding:10px;
+                    max-height:200px;overflow-y:auto;line-height:1.5;"></div>
+      </div>
+    </div>
+
+    </div><!-- end container -->
+
+    <script>
+    /* ══════════════════════════════════════════
+       المستخدمون
+    ══════════════════════════════════════════ */
+    async function loadUsers(){
+      const r=await fetch('/admin/api/users');const d=await r.json();
+      if(!d.success){document.getElementById('usersTable').innerHTML='<p class="text-danger">'+d.message+'</p>';return;}
+      let h='<div class="table-responsive"><table class="table table-dark table-bordered table-sm">';
+      h+='<thead><tr><th>ID</th><th>الاسم</th><th>الهاتف</th><th>متصل؟</th><th>محظور؟</th><th>تنبيهات</th><th>إجراء</th></tr></thead><tbody>';
+      d.users.forEach(u=>{
+        h+=`<tr><td>${u.user_id}</td><td>${u.name}</td><td>${u.phone||'-'}</td>
+        <td>${u.logged_in?'<span class="badge bg-success">نعم</span>':'<span class="badge bg-secondary">لا</span>'}</td>
+        <td>${u.blocked?'<span class="badge bg-danger">محظور</span>':'<span class="badge bg-success">فعّال</span>'}</td>
+        <td><span class="badge bg-warning text-dark">${u.alerts_count}</span></td>
+        <td>
+        <button class="btn btn-xs btn-outline-warning btn-sm" onclick="toggleBlock('${u.user_id}',${!u.blocked})">${u.blocked?'فك الحظر':'حظر'}</button>
+        <a href="/admin/api/copy_chats/${u.user_id}" class="btn btn-xs btn-outline-info btn-sm ms-1" target="_blank">روابط</a>
+        </td></tr>`;
+      });
+      h+='</tbody></table></div>';
+      document.getElementById('usersTable').innerHTML=h;
+    }
+    async function toggleBlock(slot,blocked){
+      await fetch('/admin/api/user/'+slot,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'block',blocked:blocked})});loadUsers();
+    }
+    async function doLogout(){await fetch('/admin/api/logout',{method:'POST'});location.reload();}
+    function registerBio(){
+      let did=localStorage.getItem('deviceId');
+      if(!did){did=crypto.randomUUID?crypto.randomUUID():'dev-'+Date.now();localStorage.setItem('deviceId',did);}
+      const bt=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,'0')).join('');
+      fetch('/admin/api/biometric/register',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({device_id:did,biometric_token:bt})})
+      .then(r=>r.json()).then(d=>{if(d.success){localStorage.setItem('biometricToken',bt);alert('✅ تم تسجيل البصمة');}else{alert('❌ '+d.message);}});
+    }
+
+    /* ══════════════════════════════════════════
+       الإشعارات مع التكرار والنطق
+    ══════════════════════════════════════════ */
+    const _typeColors={info:'primary',success:'success',warning:'warning',danger:'danger'};
+    const _typeIcons={info:'ℹ️',success:'✅',warning:'⚠️',danger:'🚨'};
+    let _repeatTimer=null;
+    let _repeatCount=0;
+    let _countdownTimer=null;
+    let _nextSendAt=0;
+
+    function _startCountdown(intervalMin){
+      if(_countdownTimer) clearInterval(_countdownTimer);
+      _nextSendAt=Date.now()+intervalMin*60000;
+      _countdownTimer=setInterval(()=>{
+        const rem=Math.max(0,_nextSendAt-Date.now());
+        if(!_repeatTimer){clearInterval(_countdownTimer);return;}
+        const m=Math.floor(rem/60000), s=Math.floor((rem%60000)/1000);
+        const rs=document.getElementById('repeatStatus');
+        if(rs) rs.innerHTML=
+          `<div class="alert alert-info py-2 small d-flex justify-content-between align-items-center">
+            <span>🔁 تم الإرسال <strong>${_repeatCount}</strong> مرة — التكرار كل ${intervalMin} دقيقة</span>
+            <span class="badge bg-dark text-warning" style="font-size:0.85rem">⏱ ${m}:${String(s).padStart(2,'0')}</span>
+          </div>`;
+        if(rem===0) _nextSendAt=Date.now()+intervalMin*60000;
+      },500);
+    }
+
+    function _speakNotif(msg){
+      if(!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utt=new SpeechSynthesisUtterance(msg);
+      utt.lang='ar-SA'; utt.rate=0.95; utt.pitch=1; utt.volume=1;
+      const voices=window.speechSynthesis.getVoices();
+      const arVoice=voices.find(v=>v.lang&&v.lang.startsWith('ar'));
+      if(arVoice) utt.voice=arVoice;
+      window.speechSynthesis.speak(utt);
+    }
+
+    async function _doSendNotif(){
+      const msg=document.getElementById('notifMsg').value.trim();
+      const type=document.getElementById('notifType').value;
+      if(!msg) return false;
+      const r=await fetch('/admin/api/broadcast_notification',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({message:msg,type:type})
+      });
+      const d=await r.json();
+      if(d.success){
+        _repeatCount++;
+        document.getElementById('repeatStatus').innerHTML=
+          _repeatTimer?`<div class="alert alert-info py-1 small">🔁 تم الإرسال مرة ${_repeatCount}</div>`:'';
+        loadNotifHistory();
+        _speakNotif('تم إرسال الإشعار: '+msg);
+        return true;
+      }
+      return false;
+    }
+
+    async function sendNotif(){
+      const msg=document.getElementById('notifMsg').value.trim();
+      const type=document.getElementById('notifType').value;
+      const intervalMin=parseInt(document.getElementById('notifInterval').value)||0;
+      const res=document.getElementById('notifResult');
+      if(!msg){res.innerHTML='<div class="alert alert-danger py-1 small">الرجاء كتابة نص الإشعار</div>';return;}
+      stopRepeat();
+      res.innerHTML='<div class="alert alert-secondary py-1 small"><i class="fas fa-spinner fa-spin me-1"></i>جاري النشر...</div>';
+      try{
+        const ok=await _doSendNotif();
+        if(ok){
+          res.innerHTML='<div class="alert alert-success py-1 small">✅ تم نشر الإشعار بنجاح</div>';
+          if(intervalMin>0){
+            document.getElementById('stopBtn').style.display='';
+            document.getElementById('sendBtn').innerHTML='<i class="fas fa-sync fa-spin me-1"></i>يعمل التكرار...';
+            _repeatCount=1;
+            _startCountdown(intervalMin);
+            _repeatTimer=setInterval(async()=>{
+              await _doSendNotif();
+              _nextSendAt=Date.now()+intervalMin*60000;
+            }, intervalMin*60000);
+          } else {
+            setTimeout(()=>{res.innerHTML='';},4000);
+          }
+        } else {
+          res.innerHTML='<div class="alert alert-danger py-1 small">❌ فشل الإرسال</div>';
+        }
+      }catch(e){
+        res.innerHTML=`<div class="alert alert-danger py-1 small">❌ خطأ: ${e.message}</div>`;
+      }
+    }
+
+    function stopRepeat(){
+      if(_repeatTimer){clearInterval(_repeatTimer);_repeatTimer=null;}
+      if(_countdownTimer){clearInterval(_countdownTimer);_countdownTimer=null;}
+      _repeatCount=0;
+      document.getElementById('stopBtn').style.display='none';
+      document.getElementById('sendBtn').innerHTML='<i class="fas fa-paper-plane me-1"></i>نشر الإشعار';
+      document.getElementById('repeatStatus').innerHTML='';
+    }
+
+    async function deleteNotif(id){
+      await fetch('/admin/api/delete_notification/'+id,{method:'DELETE'});loadNotifHistory();
+    }
+    async function clearAllNotifs(){
+      if(!confirm('مسح جميع الإشعارات؟')) return;
+      await fetch('/admin/api/clear_notifications',{method:'POST'});loadNotifHistory();
+    }
+
+    // ── إعدادات الإشعارات المتقدمة ──────────────────────────
+    async function loadPushStats(){
+      try{
+        const r=await fetch('/admin/api/push_stats');
+        const d=await r.json();
+        const cnt=document.getElementById('pushSubCount');
+        if(cnt) cnt.textContent=d.count+' مشترك';
+        const lst=document.getElementById('pushSubsList');
+        if(!lst) return;
+        if(!d.subscribers||!d.subscribers.length){
+          lst.innerHTML='<div class="text-muted text-center py-2">لا يوجد مشتركون بعد</div>';return;
+        }
+        lst.innerHTML=d.subscribers.map((uid,i)=>`
+          <div class="d-flex align-items-center gap-2 py-1 border-bottom border-secondary">
+            <span class="badge bg-success">${i+1}</span>
+            <span class="text-light small flex-grow-1">👤 ${uid}</span>
+            <span class="badge bg-primary">مشترك</span>
+          </div>`).join('');
+      }catch(e){
+        const lst=document.getElementById('pushSubsList');
+        if(lst) lst.innerHTML='<div class="text-danger small">فشل التحميل: '+e.message+'</div>';
+      }
+    }
+
+    async function sendTestPush(){
+      const msg  = (document.getElementById('testPushMsg')  ||{}).value||'✅ اختبار';
+      const type = (document.getElementById('testPushType') ||{}).value||'general';
+      const res  = document.getElementById('notifSettingsResult');
+      if(res) res.innerHTML='<div class="alert alert-info py-1 small"><i class="fas fa-spinner fa-spin me-1"></i>جاري الإرسال...</div>';
+      try{
+        const r=await fetch('/admin/api/test_push',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({message:msg,type:type})
+        });
+        const d=await r.json();
+        if(res) res.innerHTML=`<div class="alert alert-${d.success?'success':'danger'} py-1 small">${d.message||d.error}</div>`;
+        loadPushStats();
+      }catch(e){
+        if(res) res.innerHTML='<div class="alert alert-danger py-1 small">خطأ: '+e.message+'</div>';
+      }
+    }
+
+    function saveSoundType(val){
+      // احفظ نوع الصوت في localStorage ليقرأه كل المستخدمين
+      try{ localStorage.setItem('notif_sound_type', val); }catch(e){}
+    }
+
+    function loadSoundTypePref(){
+      try{
+        const v=localStorage.getItem('notif_sound_type')||'both';
+        const el=document.getElementById('soundType');
+        if(el) el.value=v;
+      }catch(e){}
+    }
+    async function loadNotifHistory(){
+      const el=document.getElementById('notifHistory');
+      try{
+        const r=await fetch('/admin/api/notifications');const d=await r.json();
+        if(!d.success){el.innerHTML='<p class="text-danger small">'+d.message+'</p>';return;}
+        if(!d.notifications.length){el.innerHTML='<p class="text-muted text-center small py-2">لا توجد إشعارات</p>';return;}
+        let h='';
+        d.notifications.forEach(n=>{
+          const col=_typeColors[n.type]||'secondary';const ico=_typeIcons[n.type]||'📢';
+          const ts=n.timestamp?n.timestamp.replace('T',' ').slice(0,16):'';
+          h+=`<div class="d-flex align-items-start gap-2 border-bottom border-dark pb-2 mb-2">
+            <span class="badge bg-${col} mt-1">${ico} ${n.type||'info'}</span>
+            <div class="flex-grow-1">
+              <div class="text-light small">${n.message.replace(/</g,'&lt;')}</div>
+              <div class="text-muted" style="font-size:0.72rem">${ts}</div>
+            </div>
+            <button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:0.7rem"
+              onclick="deleteNotif('${n.id}')"><i class="fas fa-times"></i></button>
+          </div>`;
+        });
+        el.innerHTML=h;
+      }catch(e){el.innerHTML='<p class="text-danger small">خطأ في التحميل</p>';}
+    }
+
+    /* ══════════════════════════════════════════
+       تحميل الملفات
+    ══════════════════════════════════════════ */
+    let _allFiles=[];
+    let _selectedFiles=new Set();
+
+    async function loadFilesList(){
+      const sec=document.getElementById('filesSection');
+      const lst=document.getElementById('filesList');
+      sec.style.display='';
+      lst.innerHTML='<div class="text-center py-3"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+      try{
+        const r=await fetch('/api/admin/list_project_files');const d=await r.json();
+        if(!d.success){lst.innerHTML='<p class="text-danger small">'+d.error+'</p>';return;}
+        _allFiles=d.files; _selectedFiles=new Set();
+        document.getElementById('filesCount').textContent=d.files.length+' ملف';
+        renderFilesList();
+      }catch(e){lst.innerHTML='<p class="text-danger small">خطأ: '+e.message+'</p>';}
+    }
+
+    function renderFilesList(filter){
+      const lst=document.getElementById('filesList');
+      let h='';
+      const q=(filter||document.getElementById('fileSearch').value||'').toLowerCase();
+      const shown=_allFiles.filter(f=>!q||f.path.toLowerCase().includes(q));
+      document.getElementById('filesCount').textContent=shown.length+' ملف'+(q?' (مصفّاة)':'');
+      shown.forEach((f,i)=>{
+        const sel=_selectedFiles.has(f.path);
+        const icon=f.path.endsWith('.py')?'🐍':f.path.endsWith('.html')?'🌐':f.path.endsWith('.js')?'📜':f.path.endsWith('.css')?'🎨':f.path.endsWith('.json')?'📋':f.path.endsWith('.png')||f.path.endsWith('.jpg')||f.path.endsWith('.jpeg')||f.path.endsWith('.webp')?'🖼️':f.path.endsWith('.txt')?'📝':'📄';
+        const safeP=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        h+=`<div class="file-item d-flex align-items-center gap-2 ${sel?'selected':''}" onclick="toggleFile('${safeP}',this)">
+          <input type="checkbox" class="form-check-input" ${sel?'checked':''} style="pointer-events:none">
+          <span>${icon}</span>
+          <span class="small text-light flex-grow-1" style="word-break:break-all">${f.path}</span>
+          <span class="badge bg-dark text-muted me-1" style="font-size:0.65rem;white-space:nowrap">${f.size}</span>
+          <a href="/api/admin/download_single_file?path=${encodeURIComponent(f.path)}"
+             class="btn btn-outline-success btn-sm py-0 px-1" style="font-size:0.7rem;white-space:nowrap"
+             title="تحميل مباشر" onclick="event.stopPropagation()">
+            <i class="fas fa-download"></i>
+          </a>
+        </div>`;
+      });
+      lst.innerHTML=h||'<p class="text-muted small text-center py-2">لا توجد ملفات</p>';
+      updateDlBtn();
+    }
+
+    function toggleFile(path,el){
+      if(_selectedFiles.has(path)){_selectedFiles.delete(path);el.classList.remove('selected');el.querySelector('input').checked=false;}
+      else{_selectedFiles.add(path);el.classList.add('selected');el.querySelector('input').checked=true;}
+      updateDlBtn();
+    }
+    function selectAllFiles(){_allFiles.forEach(f=>_selectedFiles.add(f.path));renderFilesList();}
+    function deselectAllFiles(){_selectedFiles.clear();renderFilesList();}
+    function updateDlBtn(){
+      const btn=document.getElementById('dlSelBtn');
+      const txt=document.getElementById('dlSelTxt');
+      btn.disabled=_selectedFiles.size===0;
+      if(txt) txt.textContent=_selectedFiles.size>0?`تحميل ${_selectedFiles.size} ملف (ZIP)`:'تحميل المحدد (ZIP)';
+    }
+
+    async function downloadSelected(){
+      if(_selectedFiles.size===0) return;
+      const btn=document.getElementById('dlSelBtn');
+      const txt=document.getElementById('dlSelTxt');
+      btn.disabled=true; if(txt) txt.textContent='⏳ جاري الضغط...';
+      try{
+        const r=await fetch('/api/admin/download_selected_files',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({files:[..._selectedFiles]})
+        });
+        if(!r.ok){const d=await r.json();alert('❌ '+d.error);btn.disabled=false;updateDlBtn();return;}
+        const blob=await r.blob();
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');a.href=url;a.download='selected_files.zip';
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }catch(e){alert('❌ خطأ: '+e.message);}
+      btn.disabled=false; updateDlBtn();
+    }
+
+    /* ══════════════════════════════════════════════════════
+       مرآة الكونسول — سجلات النظام الفورية (محسّن)
+    ══════════════════════════════════════════════════════ */
+    const _consoleEl = document.getElementById('consoleScreen');
+    let _autoScroll   = true;
+    let _allLogs      = [];   /* [{ts,name,level,raw,cssClass}] */
+    let _currentFilter = 'all';
+    let _searchText    = '';
+    const _maxLogs     = 1000;
+
+    const _socket = io({transports:['websocket','polling']});
+
+    _socket.on('connect', () => {
+      const st = document.getElementById('consoleStatus');
+      st.style.color='#00ff41'; st.style.borderColor='#00ff41';
+      st.textContent = '● Live';
+      _addEntry({level:'INFO', msg:'✅ متصل بالخادم — تدفق السجلات نشط', time:_now(), name:'SYSTEM'});
+    });
+    _socket.on('disconnect', () => {
+      const st = document.getElementById('consoleStatus');
+      st.style.color='#ff4444'; st.style.borderColor='#ff4444';
+      st.textContent = '● Offline';
+      _addEntry({level:'ERROR', msg:'❌ انقطع الاتصال بالخادم', time:_now(), name:'SYSTEM'});
+    });
+    _socket.on('live_log', data => _addEntry(data));
+    _socket.on('new_broadcast_notification', data => {
+      _addEntry({level:'INFO', msg:'📢 إشعار مُرسل: '+data.message, time:_now(), name:'NOTIF'});
+    });
+
+    function _now(){ return new Date().toLocaleTimeString('en-GB',{hour12:false}); }
+
+    /* تلوين HTTP methods وstatus codes */
+    function _colorText(txt){
+      return txt
+        .replace(/\b(GET)\b/g,'<span class="hl-get">GET</span>')
+        .replace(/\b(POST)\b/g,'<span class="hl-post">POST</span>')
+        .replace(/\b(PUT|PATCH)\b/g,'<span class="hl-put">$1</span>')
+        .replace(/\b(DELETE)\b/g,'<span class="hl-del">DELETE</span>')
+        .replace(/\s(2\d\d)\s/g,' <span class="hl-200">$1</span> ')
+        .replace(/\s(404)\s/g,' <span class="hl-404">404</span> ')
+        .replace(/\s(5\d\d)\s/g,' <span class="hl-500">$1</span> ');
+    }
+
+    function _addEntry(entry){
+      const lvl = (entry.level||'INFO').toUpperCase();
+      let cssClass = 'info';
+      if(lvl==='ERROR'||lvl==='CRITICAL') cssClass = lvl==='CRITICAL'?'critical':'error';
+      else if(lvl==='WARNING') cssClass = 'warn';
+      else if(lvl==='DEBUG')   cssClass = 'debug';
+      else if(entry.name==='SYSTEM'||entry.name==='NOTIF') cssClass = 'sys';
+
+      const raw = (entry.full || ((entry.time||'')+(entry.name?'['+entry.name+']':'')+' '+lvl+' '+entry.msg));
+      const logEntry = { ts: entry.time||_now(), name:entry.name||'', level:lvl, raw, cssClass,
+                         msg: entry.msg||entry.full||'' };
+      _allLogs.push(logEntry);
+      if(_allLogs.length > _maxLogs) _allLogs.shift();
+
+      _updateCount();
+      if(_matchFilter(logEntry)) _renderLine(logEntry);
+    }
+
+    function _matchFilter(e){
+      const fv = _currentFilter;
+      const lvl = e.level;
+      const ok = fv==='all' || (fv==='error'&&(lvl==='ERROR'||lvl==='CRITICAL')) ||
+                 (fv==='warning'&&lvl==='WARNING') || (fv==='info'&&lvl==='INFO') ||
+                 (fv==='debug'&&lvl==='DEBUG');
+      if(!ok) return false;
+      if(_searchText && !e.raw.toLowerCase().includes(_searchText)) return false;
+      return true;
+    }
+
+    function _esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function _renderLine(e){
+      const row = document.createElement('div');
+      row.className = 'cl ' + e.cssClass;
+      row.innerHTML =
+        '<span class="ts">'+_esc(e.ts)+'</span>'+
+        '<span class="nm">'+_esc(e.name).slice(0,10)+'</span>'+
+        '<span class="lv">'+e.level+'</span>'+
+        '<span class="tx">'+_colorText(_esc(e.msg||e.raw))+'</span>';
+      _consoleEl.appendChild(row);
+      if(_autoScroll) _consoleEl.scrollTop = _consoleEl.scrollHeight;
+    }
+
+    function _updateCount(){
+      const badge = document.getElementById('logCountBadge');
+      if(badge) badge.textContent = _allLogs.length + ' events';
+    }
+
+    function filterLogs(){
+      _currentFilter = document.getElementById('logFilter').value;
+      _searchText    = (document.getElementById('consoleSearch').value||'').toLowerCase().trim();
+      _consoleEl.innerHTML = '';
+      _allLogs.forEach(e => { if(_matchFilter(e)) _renderLine(e); });
+    }
+
+    function clearConsole(){
+      _consoleEl.innerHTML='';
+      _allLogs=[];
+      _updateCount();
+    }
+
+    function toggleAutoScroll(){
+      _autoScroll = !_autoScroll;
+      const btn = document.getElementById('autoScrollBtn');
+      btn.textContent = _autoScroll ? '🔒 Auto' : '🔓 Manual';
+      btn.style.color = _autoScroll ? '#8899ff' : '#ffaa44';
+      if(_autoScroll) _consoleEl.scrollTop = _consoleEl.scrollHeight;
+    }
+
+    function copyAllLogs(){
+      const lines = _allLogs.map(e=>
+        '['+e.ts+'] ['+e.name+'] '+e.level+' '+e.msg
+      ).join('\n');
+      if(!lines){ alert('لا توجد سجلات للنسخ'); return; }
+      navigator.clipboard.writeText(lines).then(()=>{
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = '✅ تم النسخ!';
+        btn.style.color = '#00ff41';
+        setTimeout(()=>{ btn.textContent=orig; btn.style.color=''; }, 2000);
+      }).catch(()=>{
+        const ta = document.createElement('textarea');
+        ta.value = lines; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('✅ تم نسخ '+_allLogs.length+' سطر');
+      });
+    }
+
+    async function askAiAboutLogs(){
+      const q   = (document.getElementById('aiLogQuestion').value||'').trim();
+      const res = document.getElementById('aiLogResponse');
+      const btn = document.getElementById('aiSendBtn');
+      if(!q) return;
+      btn.disabled = true; btn.textContent = '⏳...';
+      res.style.display = 'block';
+      res.textContent = '⏳ جاري التحليل...';
+      try{
+        const r = await fetch('/admin/api/log_query',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({query:q, logs: _allLogs.slice(-200).map(e=>'['+e.ts+']['+e.name+'] '+e.level+': '+e.msg)})
+        });
+        const d = await r.json();
+        res.textContent = d.success ? d.answer : ('❌ ' + (d.message||'فشل'));
+      } catch(e){
+        res.textContent = '❌ خطأ: ' + e.message;
+      }
+      btn.disabled = false; btn.textContent = '▶ إرسال';
+    }
+
+    // تهيئة تلقائية للأصوات
+    if(window.speechSynthesis){
+      window.speechSynthesis.onvoiceschanged = function(){ window.speechSynthesis.getVoices(); }
+    }
+
+    loadUsers();
+    loadNotifHistory();
+    loadPushStats();
+    loadSoundTypePref();
+    loadCardStatus();
+
+    // ══════════════════════════════════════════════════════════
+    //  إدارة بطاقات الشحن
+    // ══════════════════════════════════════════════════════════
+    async function loadCardStatus(){
+      try{
+        const r = await fetch('/admin/api/card_status');
+        const d = await r.json();
+        const el = document.getElementById('cardToggleBtn');
+        if(el){ el.textContent = d.enabled ? '🔴 تعطيل النظام' : '🟢 تفعيل النظام'; }
+        const badge = document.getElementById('cardStatusBadge');
+        if(badge){ badge.textContent = d.enabled ? '✅ مفعّل' : '⛔ معطّل'; badge.className = d.enabled ? 'badge bg-success' : 'badge bg-danger'; }
+      }catch(e){ console.error('loadCardStatus:', e); }
+    }
+    async function toggleCardSystem(){
+      const r = await fetch('/admin/api/card_status'); const d = await r.json();
+      const newState = !d.enabled;
+      const r2 = await fetch('/admin/api/toggle_card_system',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:newState})});
+      const d2 = await r2.json();
+      document.getElementById('cardMsg').innerHTML = '<div class="alert alert-'+(d2.success?'success':'danger')+'">'+d2.message+'</div>';
+      loadCardStatus();
+    }
+    async function createVouchers(){
+      const plan_id = parseInt(document.getElementById('voucherPlan').value);
+      const count = parseInt(document.getElementById('voucherCount').value)||10;
+      const r = await fetch('/admin/api/create_vouchers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan_id,count})});
+      const d = await r.json();
+      if(d.success){
+        const txt = d.codes.join('\n');
+        document.getElementById('voucherResult').value = txt;
+        document.getElementById('voucherResultArea').style.display='';
+        document.getElementById('cardMsg').innerHTML='<div class="alert alert-success">✅ تم إنشاء '+d.count+' قسيمة</div>';
+      }else{
+        document.getElementById('cardMsg').innerHTML='<div class="alert alert-danger">❌ '+d.message+'</div>';
+      }
+    }
+    async function loadVouchers(){
+      const r = await fetch('/admin/api/vouchers'); const d = await r.json();
+      const tbody = document.getElementById('vouchersTbody');
+      if(!tbody) return;
+      const vouchers = (d.vouchers||[]).slice(-100).reverse();
+      tbody.innerHTML = vouchers.map(v=>`<tr>
+        <td><code class="text-warning" style="font-size:0.75rem">${v.plan_name||'—'}</code></td>
+        <td><span class="badge bg-${v.status==='unused'?'secondary':v.status==='active'?'success':v.status==='used'?'primary':'danger'}">${v.status==='unused'?'غير مستخدمة':v.status==='active'?'نشطة':v.status==='used'?'مستخدمة':'منتهية'}</span></td>
+        <td style="font-size:0.72rem">${(v.created_at||'—').slice(0,10)}</td>
+        <td style="font-size:0.72rem">${(v.used_at||'—').slice(0,10)}</td>
+        <td style="font-size:0.72rem">${(v.expires_at||'—').slice(0,16).replace('T',' ')}</td>
+      </tr>`).join('');
+    }
+    async function loadCardSessions(){
+      const r = await fetch('/admin/api/card_sessions'); const d = await r.json();
+      const tbody = document.getElementById('cardSessionsTbody');
+      if(!tbody) return;
+      const sessions = d.sessions||[];
+      tbody.innerHTML = sessions.length===0?'<tr><td colspan="5" class="text-center text-muted">لا توجد جلسات نشطة</td></tr>':
+        sessions.map(s=>`<tr>
+          <td style="font-size:0.72rem">${s.plan_name||'—'}</td>
+          <td style="font-size:0.72rem">${s.ip_address||'—'}</td>
+          <td style="font-size:0.72rem">${(s.start_time||'—').slice(0,16).replace('T',' ')}</td>
+          <td style="font-size:0.72rem">${(s.expires_at||'—').slice(0,16).replace('T',' ')}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="terminateCardSession('${s.session_id}')"><i class="fas fa-times"></i></button></td>
+        </tr>`).join('');
+    }
+    async function terminateCardSession(sid){
+      if(!confirm('إنهاء هذه الجلسة؟')) return;
+      await fetch('/admin/api/terminate_card_session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid})});
+      loadCardSessions();
+    }
+    async function deleteVouchers(status){
+      if(!confirm('حذف القسائم '+(status||'الكل')+'؟')) return;
+      const body = status ? {status} : {};
+      await fetch('/admin/api/delete_vouchers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      document.getElementById('cardMsg').innerHTML='<div class="alert alert-success">✅ تم الحذف</div>';
+      loadVouchers();
+    }
+    function copyVouchers(){
+      const ta = document.getElementById('voucherResult');
+      if(!ta.value) return;
+      navigator.clipboard.writeText(ta.value).then(()=>alert('✅ تم النسخ!'));
+    }
+    </script>
+
+    <!-- ════ قسم إدارة البطاقات ════ -->
+    <style>
+    #cardSection .card{background:#1a1f2e;border:1px solid #2d3748;}
+    #cardSection .form-control,#cardSection .form-select{background:#0d1117;border-color:#2d3748;color:#e2e8f0;}
+    </style>
+    <div id="cardSection" class="mt-4">
+      <div class="card" style="background:#1a1f2e;border:1px solid #2d3748;">
+        <div class="card-header d-flex justify-content-between align-items-center" style="border-bottom:1px solid #2d3748;">
+          <h5 class="mb-0 text-light"><i class="fas fa-id-card me-2 text-info"></i>🎓 مركز سرعة إنجاز — نظام بطاقات الشحن</h5>
+          <div class="d-flex align-items-center gap-2">
+            <span id="cardStatusBadge" class="badge bg-danger">⛔ معطّل</span>
+            <button id="cardToggleBtn" class="btn btn-sm btn-outline-light" onclick="toggleCardSystem()">🟢 تفعيل النظام</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="cardMsg"></div>
+
+          <!-- إنشاء قسائم جديدة -->
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <label class="form-label small text-light">نوع الباقة</label>
+              <select id="voucherPlan" class="form-select" style="background:#0d1117;border-color:#2d3748;color:#e2e8f0;">
+                <option value="1">📅 يومية (24 ساعة)</option>
+                <option value="2">📅 أسبوعية (7 أيام)</option>
+                <option value="3">📅 شهرية (30 يوم)</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small text-light">عدد القسائم</label>
+              <input type="number" id="voucherCount" class="form-control" value="10" min="1" max="200" style="background:#0d1117;border-color:#2d3748;color:#e2e8f0;">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button class="btn btn-success w-100" onclick="createVouchers()">
+                <i class="fas fa-plus me-1"></i>إنشاء قسائم
+              </button>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button class="btn btn-outline-secondary w-100" onclick="loadVouchers();loadCardSessions();">
+                <i class="fas fa-sync me-1"></i>تحديث
+              </button>
+            </div>
+          </div>
+
+          <!-- منطقة الأكواد المولّدة -->
+          <div id="voucherResultArea" style="display:none;" class="mb-4">
+            <div class="d-flex justify-content-between mb-1">
+              <label class="form-label small text-success">✅ الأكواد المولّدة</label>
+              <button class="btn btn-sm btn-outline-success" onclick="copyVouchers()"><i class="fas fa-copy me-1"></i>نسخ الكل</button>
+            </div>
+            <textarea id="voucherResult" class="form-control font-monospace" rows="6" readonly
+              style="background:#0a0e1a;border-color:#2d3748;color:#4ade80;font-size:0.82rem;letter-spacing:1px;"></textarea>
+          </div>
+
+          <!-- جدول القسائم -->
+          <ul class="nav nav-tabs mb-3" style="border-color:#2d3748;">
+            <li class="nav-item">
+              <a class="nav-link active text-light" href="#" onclick="loadVouchers();document.querySelectorAll('.c-tab').forEach(e=>e.style.display='none');document.getElementById('tabVouchers').style.display='';return false;"
+                 style="border-color:#2d3748;background:#0d1117;">📋 سجل القسائم</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link text-light" href="#" onclick="loadCardSessions();document.querySelectorAll('.c-tab').forEach(e=>e.style.display='none');document.getElementById('tabSessions').style.display='';return false;"
+                 style="border-color:#2d3748;background:#161b22;">🟢 الجلسات النشطة</a>
+            </li>
+          </ul>
+
+          <div id="tabVouchers" class="c-tab">
+            <div class="d-flex justify-content-end gap-2 mb-2">
+              <button class="btn btn-sm btn-outline-warning" onclick="deleteVouchers('used')"><i class="fas fa-trash me-1"></i>حذف المستخدمة</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteVouchers('')"><i class="fas fa-trash me-1"></i>حذف الكل</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-dark table-sm table-hover" style="font-size:0.82rem;">
+                <thead><tr><th>الباقة</th><th>الحالة</th><th>تاريخ الإنشاء</th><th>تاريخ الاستخدام</th><th>الانتهاء</th></tr></thead>
+                <tbody id="vouchersTbody"><tr><td colspan="5" class="text-center text-muted">اضغط تحديث لتحميل البيانات</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="tabSessions" class="c-tab" style="display:none;">
+            <div class="table-responsive">
+              <table class="table table-dark table-sm table-hover" style="font-size:0.82rem;">
+                <thead><tr><th>الباقة</th><th>IP</th><th>بداية الجلسة</th><th>الانتهاء</th><th>إجراء</th></tr></thead>
+                <tbody id="cardSessionsTbody"><tr><td colspan="5" class="text-center text-muted">لا توجد جلسات نشطة</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ قسم التحديثات ════════════ -->
+    <div class="card bg-secondary mt-4" style="border:1px solid #3d4a5c;">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-sync-alt me-2 text-primary"></i>🔄 تحديث التطبيق</h5>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="autoUpdateToggle" style="width:50px;height:25px;cursor:pointer;">
+          <label class="form-check-label text-light small me-2" for="autoUpdateToggle">تحديث تلقائي</label>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="updateStatus" class="alert alert-info mb-3">
+          <i class="fas fa-spinner fa-spin me-2"></i> جاري التحقق من التحديثات...
+        </div>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <button class="btn btn-primary" onclick="checkForUpdatesUI()" id="checkUpdateBtn">
+            <i class="fas fa-search me-1"></i>بحث عن تحديث
+          </button>
+          <button class="btn btn-success" onclick="performUpdateUI()" id="updateNowBtn" disabled>
+            <i class="fas fa-download me-1"></i>تحديث الآن
+          </button>
+          <button class="btn btn-outline-secondary" onclick="refreshUpdateStatus()">
+            <i class="fas fa-sync me-1"></i>تحديث الحالة
+          </button>
+        </div>
+        <div id="updateProgress" style="display:none;">
+          <div class="progress mb-2">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:0%;" id="updateProgressBar">0%</div>
+          </div>
+          <div id="updateLogs" class="small text-light" style="max-height:150px;overflow-y:auto;background:#0d1117;padding:8px;border-radius:6px;font-family:monospace;font-size:12px;white-space:pre-wrap;"></div>
+        </div>
+        <div class="mt-2 small text-muted">
+          <span id="versionInfo">الإصدار الحالي: <span class="text-light">جاري التحميل...</span></span>
+          <span class="mx-2">|</span>
+          <span id="lastCheckInfo">آخر فحص: <span class="text-light">-</span></span>
+        </div>
+      </div>
+    </div>
+    <script>
+    function refreshUpdateStatus(){
+      fetch('/api/auto_update_status').then(function(r){return r.json();}).then(function(data){
+        if(data.success){
+          document.getElementById('autoUpdateToggle').checked=data.auto_update;
+          if(data.last_update)
+            document.getElementById('lastCheckInfo').innerHTML='آخر تحديث: <span class="text-light">'+new Date(data.last_update).toLocaleString('ar-EG')+'</span>';
+        }
+      }).catch(function(){});
+      checkForUpdatesUI();
+    }
+    function checkForUpdatesUI(){
+      var btn=document.getElementById('checkUpdateBtn'),statusDiv=document.getElementById('updateStatus'),updateBtn=document.getElementById('updateNowBtn');
+      btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin me-1"></i>جاري البحث...';
+      statusDiv.className='alert alert-info'; statusDiv.innerHTML='<i class="fas fa-spinner fa-spin me-2"></i> جاري التحقق...';
+      fetch('/api/check_update').then(function(r){return r.json();}).then(function(data){
+        if(data.success){
+          document.getElementById('versionInfo').innerHTML='الإصدار الحالي: <span class="text-light">'+(data.current||'غير معروف')+'</span>';
+          if(data.has_update){
+            statusDiv.className='alert alert-warning';
+            statusDiv.innerHTML='<i class="fas fa-exclamation-triangle me-2"></i>'+data.message+'<br><small class="text-muted">الأحدث: '+(data.latest||'')+'</small>';
+            updateBtn.disabled=false;
+          }else{
+            statusDiv.className='alert alert-success';
+            statusDiv.innerHTML='<i class="fas fa-check-circle me-2"></i> '+data.message;
+            updateBtn.disabled=true;
+          }
+        }else{
+          statusDiv.className='alert alert-danger';
+          statusDiv.innerHTML='<i class="fas fa-times-circle me-2"></i> '+(data.message||'خطأ');
+        }
+      }).catch(function(err){
+        statusDiv.className='alert alert-danger';
+        statusDiv.innerHTML='<i class="fas fa-times-circle me-2"></i> خطأ: '+err.message;
+      }).finally(function(){ btn.disabled=false; btn.innerHTML='<i class="fas fa-search me-1"></i>بحث عن تحديث'; });
+    }
+    function performUpdateUI(){
+      if(!confirm('هل أنت متأكد من رغبتك في التحديث الآن؟')) return;
+      var btn=document.getElementById('updateNowBtn'),statusDiv=document.getElementById('updateStatus');
+      var progressDiv=document.getElementById('updateProgress'),progressBar=document.getElementById('updateProgressBar'),logsDiv=document.getElementById('updateLogs');
+      btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin me-1"></i>جاري التحديث...';
+      statusDiv.className='alert alert-warning'; statusDiv.innerHTML='<i class="fas fa-sync-alt fa-spin me-2"></i> جاري تنفيذ التحديث...';
+      progressDiv.style.display='block'; progressBar.style.width='10%'; progressBar.textContent='10%'; logsDiv.innerHTML='📥 بدء عملية التحديث...\n';
+      fetch('/api/perform_update',{method:'POST',headers:{'Content-Type':'application/json'}})
+      .then(function(r){return r.json();}).then(function(data){
+        if(data.logs) logsDiv.innerHTML=data.logs.join('\n');
+        if(data.success){
+          progressBar.style.width='95%'; progressBar.textContent='95%'; statusDiv.className='alert alert-success';
+          logsDiv.innerHTML+='\n🔄 جاري إعادة تشغيل الخادم...\n';
+          var countdown=10;
+          var iv=setInterval(function(){ countdown--;
+            statusDiv.innerHTML='<i class="fas fa-check-circle me-2"></i> ✅ تم التحديث! إعادة تحميل بعد '+countdown+' ثوانٍ';
+            if(countdown<=0){clearInterval(iv);window.location.reload();}
+          },1000);
+        }else{
+          progressBar.className='progress-bar bg-danger'; statusDiv.className='alert alert-danger';
+          statusDiv.innerHTML='<i class="fas fa-times-circle me-2"></i> ❌ '+(data.message||'فشل التحديث');
+          btn.disabled=false; btn.innerHTML='<i class="fas fa-download me-1"></i>إعادة المحاولة';
+        }
+      }).catch(function(err){
+        progressBar.className='progress-bar bg-danger'; statusDiv.className='alert alert-danger';
+        statusDiv.innerHTML='<i class="fas fa-times-circle me-2"></i> خطأ: '+err.message;
+        btn.disabled=false; btn.innerHTML='<i class="fas fa-download me-1"></i>إعادة المحاولة';
+      });
+    }
+    document.addEventListener('DOMContentLoaded',function(){
+      document.getElementById('autoUpdateToggle').addEventListener('change',function(){
+        var enabled=this.checked,statusDiv=document.getElementById('updateStatus');
+        statusDiv.className='alert alert-info';
+        statusDiv.innerHTML='<i class="fas fa-spinner fa-spin me-2"></i> '+(enabled?'جاري تفعيل':'جاري إلغاء')+' التحديث التلقائي...';
+        fetch('/api/toggle_auto_update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:enabled})})
+        .then(function(r){return r.json();}).then(function(data){
+          if(data.success){
+            statusDiv.className='alert alert-success';
+            statusDiv.innerHTML='<i class="fas fa-check-circle me-2"></i> '+data.message;
+            setTimeout(refreshUpdateStatus,3000);
+          }else{
+            statusDiv.className='alert alert-danger';
+            statusDiv.innerHTML='<i class="fas fa-times-circle me-2"></i> '+data.message;
+            document.getElementById('autoUpdateToggle').checked=!enabled;
+          }
+        }).catch(function(err){
+          statusDiv.className='alert alert-danger';
+          statusDiv.innerHTML='<i class="fas fa-times-circle me-2"></i> خطأ: '+err.message;
+          document.getElementById('autoUpdateToggle').checked=!enabled;
+        });
+      });
+      refreshUpdateStatus();
+      setInterval(refreshUpdateStatus,300000);
+      if(typeof socket!=='undefined'){
+        socket.on('update_completed',function(data){
+          var statusDiv=document.getElementById('updateStatus');
+          statusDiv.className='alert alert-success';
+          statusDiv.innerHTML='<i class="fas fa-check-circle me-2"></i> '+(data.message||'✅ تم التحديث تلقائياً')+'<br><small>الإصدار: '+(data.version||'')+'</small>';
+          setTimeout(refreshUpdateStatus,5000);
+        });
+      }
+    });
+    </script>
+
+    <!-- ════════ الإشعارات الدورية (الترويجية) ════════ -->
+    <div class="card bg-secondary mt-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-bell me-2 text-warning"></i>📢 الإشعارات الدورية (ترويجية)</h5>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="promoToggle" style="width:50px;height:25px;">
+          <label class="form-check-label text-light small me-2" for="promoToggle">تفعيل</label>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="promoStatus" class="alert alert-info mb-2">
+          الحالة: <span id="promoState">غير مفعّل</span>
+          <span class="ms-3" id="promoCount">عدد الرسائل: 0</span>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small text-light">الرسائل الترويجية (كل سطر رسالة)</label>
+          <textarea id="promoMessages" class="form-control bg-dark text-light border-secondary" rows="6"
+            placeholder="اكتب رسالة في كل سطر...&#10;سيتم إرسالها دورياً كل 5 دقائق"></textarea>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" onclick="savePromoMessages()">
+            <i class="fas fa-save me-1"></i>حفظ الرسائل
+          </button>
+          <button class="btn btn-outline-info btn-sm" onclick="loadPromoData()">
+            <i class="fas fa-sync me-1"></i>تحديث
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="resetPromoIndex()">
+            <i class="fas fa-undo me-1"></i>إعادة تعيين المؤشر
+          </button>
+        </div>
+        <div id="promoResult" class="mt-2"></div>
+        <div class="mt-2 small text-muted">
+          <i class="fas fa-info-circle me-1"></i>
+          يتم إرسال الإشعارات كل <strong>5 دقائق</strong> للمستخدمين المشتركين في Web Push
+        </div>
+      </div>
+    </div>
+    <script>
+    async function loadPromoData(){
+      try{
+        var r=await fetch('/api/promo_data');
+        var d=await r.json();
+        if(d.success){
+          document.getElementById('promoToggle').checked=d.enabled;
+          document.getElementById('promoState').textContent=d.enabled?'مفعّل ✅':'غير مفعّل ❌';
+          document.getElementById('promoState').className=d.enabled?'text-success':'text-secondary';
+          document.getElementById('promoMessages').value=d.messages.join('\n');
+          document.getElementById('promoCount').textContent='عدد الرسائل: '+d.messages.length;
+        }
+      }catch(e){console.error('Load promo error:',e);}
+    }
+    async function savePromoMessages(){
+      var msgs=document.getElementById('promoMessages').value.split('\n').map(function(m){return m.trim();}).filter(function(m){return m;});
+      var resultDiv=document.getElementById('promoResult');
+      if(msgs.length===0){resultDiv.innerHTML='<div class="alert alert-danger py-1 small">⚠️ الرجاء إدخال رسالة واحدة على الأقل</div>';return;}
+      resultDiv.innerHTML='<div class="alert alert-info py-1 small"><i class="fas fa-spinner fa-spin me-1"></i> جاري الحفظ...</div>';
+      try{
+        var r=await fetch('/api/promo_save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:msgs})});
+        var d=await r.json();
+        if(d.success){
+          resultDiv.innerHTML='<div class="alert alert-success py-1 small">✅ '+d.message+'</div>';
+          document.getElementById('promoCount').textContent='عدد الرسائل: '+d.count;
+        }else{resultDiv.innerHTML='<div class="alert alert-danger py-1 small">❌ '+d.message+'</div>';}
+      }catch(e){resultDiv.innerHTML='<div class="alert alert-danger py-1 small">❌ خطأ: '+e.message+'</div>';}
+    }
+    async function resetPromoIndex(){
+      if(!confirm('هل تريد إعادة تعيين المؤشر للرسالة الأولى؟')) return;
+      try{
+        var r=await fetch('/api/promo_data');
+        var d=await r.json();
+        if(d.success){
+          var r2=await fetch('/api/promo_save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:d.messages})});
+          var d2=await r2.json();
+          if(d2.success){
+            document.getElementById('promoResult').innerHTML='<div class="alert alert-success py-1 small">✅ تم إعادة تعيين المؤشر إلى الرسالة الأولى</div>';
+            loadPromoData();
+          }
+        }
+      }catch(e){alert('خطأ: '+e.message);}
+    }
+    document.getElementById('promoToggle').addEventListener('change',async function(){
+      var enabled=this.checked,statusDiv=document.getElementById('promoState'),resultDiv=document.getElementById('promoResult');
+      statusDiv.textContent='جاري التغيير...';
+      resultDiv.innerHTML='<div class="alert alert-info py-1 small"><i class="fas fa-spinner fa-spin me-1"></i> جاري التفعيل...</div>';
+      try{
+        var r=await fetch('/api/promo_toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:enabled})});
+        var d=await r.json();
+        if(d.success){
+          statusDiv.textContent=enabled?'مفعّل ✅':'غير مفعّل ❌';
+          statusDiv.className=enabled?'text-success':'text-secondary';
+          resultDiv.innerHTML='<div class="alert alert-success py-1 small">✅ '+d.message+'</div>';
+        }else{
+          statusDiv.textContent='فشل التغيير';
+          resultDiv.innerHTML='<div class="alert alert-danger py-1 small">❌ '+d.message+'</div>';
+          document.getElementById('promoToggle').checked=!enabled;
+        }
+      }catch(e){
+        statusDiv.textContent='خطأ';
+        resultDiv.innerHTML='<div class="alert alert-danger py-1 small">❌ خطأ: '+e.message+'</div>';
+        document.getElementById('promoToggle').checked=!enabled;
+      }
+    });
+    document.addEventListener('DOMContentLoaded',function(){
+      loadPromoData();
+      setInterval(loadPromoData,30000);
+    });
+    </script>
+
+    </body></html>''', 200
 
 
 
@@ -13745,9 +14936,7 @@ def admin_delete_vouchers():
 # ══════════════════════════════════════════════════════════════════════════════
 
 FEATURE_RESTRICTIONS_FILE = os.path.join(DATA_DIR, "feature_restrictions.json")
-_GH_FR_PATH = "data/feature_restrictions.json"
 FEATURE_VOUCHERS_FILE     = os.path.join(DATA_DIR, "feature_vouchers.json")
-_GH_FV_PATH = "data/feature_vouchers.json"
 _FR_LOCK = threading.Lock()
 _FV_LOCK = threading.Lock()
 
@@ -13796,13 +14985,6 @@ _FR_DEFAULT = {
 }
 
 def load_feature_restrictions():
-    if _ghdb:
-        data = _ghdb.gh_load(_GH_FR_PATH, FEATURE_RESTRICTIONS_FILE, None)
-        if data is not None:
-            for k, v in _FR_DEFAULT.items():
-                if k not in data:
-                    data[k] = v
-            return data
     with _FR_LOCK:
         try:
             if os.path.exists(FEATURE_RESTRICTIONS_FILE):
@@ -13817,9 +14999,6 @@ def load_feature_restrictions():
         return dict(_FR_DEFAULT)
 
 def save_feature_restrictions(data):
-    if _ghdb:
-        _ghdb.gh_save(_GH_FR_PATH, FEATURE_RESTRICTIONS_FILE, data, "تحديث تقييدات الوظائف")
-        return
     with _FR_LOCK:
         try:
             with open(FEATURE_RESTRICTIONS_FILE, 'w', encoding='utf-8') as f:
@@ -13880,10 +15059,6 @@ def is_user_restricted(user_id):
     return False
 
 def load_feature_vouchers():
-    if _ghdb:
-        data = _ghdb.gh_load(_GH_FV_PATH, FEATURE_VOUCHERS_FILE, None)
-        if data is not None:
-            return data
     with _FV_LOCK:
         try:
             if os.path.exists(FEATURE_VOUCHERS_FILE):
@@ -13894,9 +15069,6 @@ def load_feature_vouchers():
         return {k: {"users": []} for k in FEATURE_LABELS}
 
 def save_feature_vouchers(data):
-    if _ghdb:
-        _ghdb.gh_save(_GH_FV_PATH, FEATURE_VOUCHERS_FILE, data, "تحديث قسائم الوظائف")
-        return
     with _FV_LOCK:
         try:
             with open(FEATURE_VOUCHERS_FILE, 'w', encoding='utf-8') as f:
@@ -14707,9 +15879,7 @@ def api_add_account_slot():
     """إنشاء فتحة حساب جديدة والتبديل إليها"""
     try:
         global PREDEFINED_USERS
-        # نحسب الأسماء الموجودة فعلياً (تحميل جديد لا نسخة قديمة مخزّنة بالذاكرة) لتجنّب تكرار المعرّف
-        # أو فشل الإنشاء بسبب معرّف يعتقد الخادم أنه فاضٍ بينما هو محجوز فعلاً في الملف/GitHub.
-        existing = set(load_dynamic_users().keys())
+        existing = set(PREDEFINED_USERS.keys())
         n = 1
         while f"user_{n}" in existing:
             n += 1
@@ -14717,27 +15887,12 @@ def api_add_account_slot():
         _colors = ["#6366f1","#28a745","#ffc107","#dc3545","#6f42c1","#17a2b8","#fd7e14","#20c997"]
         _color = _colors[(n - 1) % len(_colors)]
         _ok, _msg = add_dynamic_user(new_uid, f"حساب {n}", "fas fa-user-plus", _color)
-        if not _ok:
-            # فشل الإنشاء فعلياً — لا نبدّل الجلسة ولا نعيد success:true، وإلا يبقى المستخدم
-            # عالقاً على حساب غير موجود في القائمة (وهذا ما كان يجعل الواجهة "تضل ثابتة كما هي").
-            return jsonify({"success": False, "message": _msg or "❌ فشل إنشاء الحساب"})
-        # copy-on-write: نبني نسخة جديدة من القاموس لتجنب تعارضات الخيوط (thread-safety)
-        _new_predefined = dict(PREDEFINED_USERS)
-        _new_predefined[new_uid] = {"id": new_uid, "name": f"حساب {n}", "icon": "fas fa-user-plus", "color": _color}
-        PREDEFINED_USERS = _new_predefined
-        # إبطال الذاكرة المؤقتة فوراً حتى تُحمَّل البيانات الجديدة في الطلبات القادمة
-        invalidate_dynamic_users_cache()
-        # حفظ إعدادات الحساب الحالي قبل الانتقال، تماماً كما يفعل التبديل بين الحسابات
-        old_uid = session.get('user_id', 'user_1')
-        if old_uid in USERS:
-            _cur_settings = USERS[old_uid].get('settings', {})
-            if _cur_settings:
-                save_settings(old_uid, _cur_settings)
-        # التبديل إلى الفتحة الجديدة مع وضع علامة تدل على أنه حساب محدد مسبقاً
+        if _ok:
+            PREDEFINED_USERS = load_dynamic_users()
+        # التبديل إلى الفتحة الجديدة
+        old_uid = session.get('user_id')
         session['user_id'] = new_uid
-        session['_predefined_user'] = True
         session.permanent = True
-        get_or_create_user(new_uid)
         return jsonify({"success": True, "user_id": new_uid, "message": f"✅ تم إنشاء فتحة حساب {n} جديدة"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
