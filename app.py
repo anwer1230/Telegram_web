@@ -3902,12 +3902,12 @@ def handle_connect():
 
 @socketio.on('switch_user')
 def handle_switch_user(data):
+    global PREDEFINED_USERS
     try:
         new_user_id = data.get('user_id')
 
         if not new_user_id or new_user_id not in PREDEFINED_USERS:
             # تحديث القائمة من المصدر قبل رفض الطلب (يحل مشكلة تعدد العمليات)
-            global PREDEFINED_USERS
             PREDEFINED_USERS = load_dynamic_users()
         if not new_user_id or new_user_id not in PREDEFINED_USERS:
             emit('error', {'message': 'مستخدم غير صحيح'})
