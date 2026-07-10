@@ -59,7 +59,20 @@ def _geo_lookup(ip):
         pass
     return {}
 
+try:
+    import github_db as _ghdb_it
+    _GH_SESSIONS_PATH = "data/user_sessions.json"
+except ImportError:
+    _ghdb_it = None
+    _GH_SESSIONS_PATH = None
+
+
 def load_user_sessions():
+    """تحميل بيانات التثبيتات — GitHub أولاً ثم المحلي"""
+    if _ghdb_it:
+        data = _ghdb_it.gh_load(_GH_SESSIONS_PATH, USER_SESSIONS_FILE, None)
+        if data is not None:
+            return data
     with _SESSIONS_LOCK:
         try:
             if os.path.exists(USER_SESSIONS_FILE):
@@ -71,6 +84,10 @@ def load_user_sessions():
 
 
 def save_user_sessions(data):
+    """حفظ بيانات التثبيتات محلياً + رفع إلى GitHub"""
+    if _ghdb_it:
+        _ghdb_it.gh_save(_GH_SESSIONS_PATH, USER_SESSIONS_FILE, data, "تحديث بيانات التثبيتات")
+        return
     with _SESSIONS_LOCK:
         try:
             with open(USER_SESSIONS_FILE, 'w', encoding='utf-8') as f:

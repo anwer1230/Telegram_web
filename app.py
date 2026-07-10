@@ -443,15 +443,29 @@ if not os.path.exists(SESSIONS_DIR):
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# ── وحدة GitHub كقاعدة بيانات ثابتة (github_db.py) ────────────────────────
+try:
+    import github_db as _ghdb
+    logger.info("✅ github_db: المستودع كقاعدة بيانات جاهز")
+except ImportError:
+    _ghdb = None
+    logger.warning("⚠️ github_db غير موجود — يُستخدم التخزين المحلي فقط")
+
 # ── ملف بطاقات الشحن ──
 CARDS_FILE = os.path.join(DATA_DIR, "cards.json")
 _CARDS_LOCK = threading.Lock()
 
 # ── ملف روابط الدعوة ──
 INVITE_FILE = os.path.join(DATA_DIR, "invite_tokens.json")
+_GH_INVITE_PATH = "data/invite_tokens.json"
 
 # ── دوال إدارة روابط الدعوة (One-time Invite Links) ──
 def load_invites():
+    """تحميل روابط الدعوة — GitHub أولاً ثم المحلي"""
+    if _ghdb:
+        data = _ghdb.gh_load(_GH_INVITE_PATH, INVITE_FILE, None)
+        if data is not None:
+            return data
     try:
         if os.path.exists(INVITE_FILE):
             with open(INVITE_FILE, 'r', encoding='utf-8') as f:
@@ -461,6 +475,10 @@ def load_invites():
     return {"tokens": []}
 
 def save_invites(data):
+    """حفظ روابط الدعوة محلياً + GitHub"""
+    if _ghdb:
+        _ghdb.gh_save(_GH_INVITE_PATH, INVITE_FILE, data, "تحديث روابط الدعوة")
+        return True
     try:
         with open(INVITE_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -563,6 +581,7 @@ push_subscriptions = _load_push_subs()
 
 PROMO_FILE = os.path.join(os.path.dirname(__file__), 'data', 'promo_messages.json')
 os.makedirs(os.path.dirname(PROMO_FILE), exist_ok=True)
+_GH_PROMO_PATH = "data/promo_messages.json"
 
 DEFAULT_PROMO_MESSAGES = [
     "🚀 مركز سرعة إنجاز – الحل الذكي لأتمتة تيليجرام! راقب الكلمات المفتاحية، أرسل رسائل ذكية تتجاوز الحظر، وأدر حسابات متعددة بكل احترافية. كل ذلك في منصة واحدة!",
@@ -578,6 +597,10 @@ DEFAULT_PROMO_MESSAGES = [
 ]
 
 def load_promo_data():
+    if _ghdb:
+        data = _ghdb.gh_load(_GH_PROMO_PATH, PROMO_FILE, None)
+        if data is not None:
+            return data
     try:
         if os.path.exists(PROMO_FILE):
             with open(PROMO_FILE, 'r', encoding='utf-8') as f:
@@ -589,6 +612,9 @@ def load_promo_data():
     return default_data
 
 def save_promo_data(data):
+    if _ghdb:
+        _ghdb.gh_save(_GH_PROMO_PATH, PROMO_FILE, data, "تحديث الإشعارات الدورية")
+        return
     try:
         with open(PROMO_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -13719,7 +13745,9 @@ def admin_delete_vouchers():
 # ══════════════════════════════════════════════════════════════════════════════
 
 FEATURE_RESTRICTIONS_FILE = os.path.join(DATA_DIR, "feature_restrictions.json")
+_GH_FR_PATH = "data/feature_restrictions.json"
 FEATURE_VOUCHERS_FILE     = os.path.join(DATA_DIR, "feature_vouchers.json")
+_GH_FV_PATH = "data/feature_vouchers.json"
 _FR_LOCK = threading.Lock()
 _FV_LOCK = threading.Lock()
 
@@ -13768,6 +13796,13 @@ _FR_DEFAULT = {
 }
 
 def load_feature_restrictions():
+    if _ghdb:
+        data = _ghdb.gh_load(_GH_FR_PATH, FEATURE_RESTRICTIONS_FILE, None)
+        if data is not None:
+            for k, v in _FR_DEFAULT.items():
+                if k not in data:
+                    data[k] = v
+            return data
     with _FR_LOCK:
         try:
             if os.path.exists(FEATURE_RESTRICTIONS_FILE):
@@ -13782,6 +13817,9 @@ def load_feature_restrictions():
         return dict(_FR_DEFAULT)
 
 def save_feature_restrictions(data):
+    if _ghdb:
+        _ghdb.gh_save(_GH_FR_PATH, FEATURE_RESTRICTIONS_FILE, data, "تحديث تقييدات الوظائف")
+        return
     with _FR_LOCK:
         try:
             with open(FEATURE_RESTRICTIONS_FILE, 'w', encoding='utf-8') as f:
@@ -13842,6 +13880,10 @@ def is_user_restricted(user_id):
     return False
 
 def load_feature_vouchers():
+    if _ghdb:
+        data = _ghdb.gh_load(_GH_FV_PATH, FEATURE_VOUCHERS_FILE, None)
+        if data is not None:
+            return data
     with _FV_LOCK:
         try:
             if os.path.exists(FEATURE_VOUCHERS_FILE):
@@ -13852,6 +13894,9 @@ def load_feature_vouchers():
         return {k: {"users": []} for k in FEATURE_LABELS}
 
 def save_feature_vouchers(data):
+    if _ghdb:
+        _ghdb.gh_save(_GH_FV_PATH, FEATURE_VOUCHERS_FILE, data, "تحديث قسائم الوظائف")
+        return
     with _FV_LOCK:
         try:
             with open(FEATURE_VOUCHERS_FILE, 'w', encoding='utf-8') as f:
