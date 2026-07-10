@@ -3879,6 +3879,10 @@ def handle_switch_user(data):
         new_user_id = data.get('user_id')
 
         if not new_user_id or new_user_id not in PREDEFINED_USERS:
+            # تحديث القائمة من المصدر قبل رفض الطلب (يحل مشكلة تعدد العمليات)
+            global PREDEFINED_USERS
+            PREDEFINED_USERS = load_dynamic_users()
+        if not new_user_id or new_user_id not in PREDEFINED_USERS:
             emit('error', {'message': 'مستخدم غير صحيح'})
             return
 
@@ -4007,11 +4011,18 @@ def index():
         pass
     # ────────────────────────────────────────────────────────────
     if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
-        # مهم: لا نُسند أبداً معرّف حساب موجود مسبقاً (مثل أول حساب في PREDEFINED_USERS)
-        # لزائر جديد ليس لديه جلسة — وإلا يرى بيانات وجلسة تيليجرام حساب شخص آخر بالكامل.
-        # كل زائر جديد يحصل على فتحة مؤقتة فريدة خاصة به فقط.
-        session['user_id'] = allocate_new_visitor_slot()
-        session.permanent = True
+        # إذا كان user_id موجوداً في الجلسة لكن غير موجود في الذاكرة، نحاول تحديث القائمة
+        # من المصدر (ملف محلي/GitHub) قبل تخصيص فتحة جديدة — يحل مشكلة تعدد العمليات (gunicorn)
+        # ومشكلة التأخير في تزامن GitHub بعد إضافة حساب جديد.
+        if 'user_id' in session:
+            global PREDEFINED_USERS
+            PREDEFINED_USERS = load_dynamic_users()
+        if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
+            # مهم: لا نُسند أبداً معرّف حساب موجود مسبقاً (مثل أول حساب في PREDEFINED_USERS)
+            # لزائر جديد ليس لديه جلسة — وإلا يرى بيانات وجلسة تيليجرام حساب شخص آخر بالكامل.
+            # كل زائر جديد يحصل على فتحة مؤقتة فريدة خاصة به فقط.
+            session['user_id'] = allocate_new_visitor_slot()
+            session.permanent = True
 
     user_id = session['user_id']
 
@@ -4770,6 +4781,10 @@ def api_switch_user():
         data = request.get_json()
         new_user_id = data.get('user_id')
 
+        if not new_user_id or new_user_id not in PREDEFINED_USERS:
+            # تحديث القائمة من المصدر قبل رفض الطلب (يحل مشكلة تعدد العمليات)
+            global PREDEFINED_USERS
+            PREDEFINED_USERS = load_dynamic_users()
         if not new_user_id or new_user_id not in PREDEFINED_USERS:
             return jsonify({
                 "success": False,
@@ -14656,7 +14671,10 @@ def api_add_account_slot():
             # فشل الإنشاء فعلياً — لا نبدّل الجلسة ولا نعيد success:true، وإلا يبقى المستخدم
             # عالقاً على حساب غير موجود في القائمة (وهذا ما كان يجعل الواجهة "تضل ثابتة كما هي").
             return jsonify({"success": False, "message": _msg or "❌ فشل إنشاء الحساب"})
-        PREDEFINED_USERS = load_dynamic_users()
+        # نحدّث PREDEFINED_USERS مباشرةً بإضافة المستخدم الجديد بدلاً من إعادة التحميل
+        # من GitHub — إعادة التحميل قد تُعيد بيانات قديمة إذا لم يكتمل الرفع بعد
+        # أو إذا كان الطلب يصل لـ worker مختلف في gunicorn.
+        PREDEFINED_USERS[new_uid] = {"id": new_uid, "name": f"حساب {n}", "icon": "fas fa-user-plus", "color": _color}
         # حفظ إعدادات الحساب الحالي قبل الانتقال، تماماً كما يفعل التبديل بين الحسابات
         old_uid = session.get('user_id', 'user_1')
         if old_uid in USERS:
