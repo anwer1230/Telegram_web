@@ -4315,8 +4315,9 @@ def api_save_login():
                 os.remove(old_session_file)
             except Exception as e:
                 logger.warning(f"Could not remove old session file: {e}")
+        _old_uname = PREDEFINED_USERS.get(user_id, {}).get('name', user_id)
         socketio.emit('log_update', {
-            "message": f"🔄 تم مسح الجلسة القديمة لـ {PREDEFINED_USERS[user_id]['name']}"
+            "message": f"🔄 تم مسح الجلسة القديمة لـ {_old_uname}"
         }, to=user_id)
 
     settings = {
@@ -4332,8 +4333,9 @@ def api_save_login():
         })
 
     try:
+        _login_uname = PREDEFINED_USERS.get(user_id, {}).get('name', f"حساب جديد ({user_id})")
         socketio.emit('log_update', {
-            "message": f"🔄 بدء تسجيل دخول {PREDEFINED_USERS[user_id]['name']}..."
+            "message": f"🔄 بدء تسجيل دخول {_login_uname}..."
         }, to=user_id)
 
         with USERS_LOCK:
