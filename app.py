@@ -4000,6 +4000,7 @@ def handle_heartbeat(data):
 # ===========================
 @app.route("/")
 def index():
+    global PREDEFINED_USERS
     # ── فحص رابط الدعوة ─────────────────────────────────────────
     invite_token = request.args.get("invite")
     if invite_token:
@@ -4043,7 +4044,6 @@ def index():
         # هذا يحل مشكلة تعدد العمليات (gunicorn) ومشكلة التأخير بعد إضافة حساب جديد،
         # دون إضافة طلبات GitHub زائدة لجلسات الزوار العاديين.
         if 'user_id' in session and session.get('_predefined_user'):
-            global PREDEFINED_USERS
             PREDEFINED_USERS = load_dynamic_users()
         if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
             # مهم: لا نُسند أبداً معرّف حساب موجود مسبقاً (مثل أول حساب في PREDEFINED_USERS)
@@ -4806,13 +4806,13 @@ def api_account_avatar(uid):
 
 @app.route("/api/switch_user", methods=["POST"])
 def api_switch_user():
+    global PREDEFINED_USERS
     try:
         data = request.get_json()
         new_user_id = data.get('user_id')
 
         if not new_user_id or new_user_id not in PREDEFINED_USERS:
             # تحديث القائمة من المصدر قبل رفض الطلب (يحل مشكلة تعدد العمليات)
-            global PREDEFINED_USERS
             PREDEFINED_USERS = load_dynamic_users()
         if not new_user_id or new_user_id not in PREDEFINED_USERS:
             return jsonify({
