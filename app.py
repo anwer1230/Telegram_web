@@ -3705,7 +3705,7 @@ def execute_scheduled_messages(user_id, settings):
         successful = 0
         failed = 0
 
-        # ── الحصول على مدير العميل للانضمام التلقائي ──────────────────────
+        # ── الحصول على مدير العميل لفحص العضوية ──────────────────────────
         _sched_client_mgr = None
         try:
             with USERS_LOCK:
@@ -3713,33 +3713,67 @@ def execute_scheduled_messages(user_id, settings):
         except Exception:
             pass
 
-        # ── الدورة الأولى: فحص العضوية والانضمام التلقائي للمجموعات الجديدة ──
+        # ── الدورة الأولى: فحص العضوية وإشعار المستخدم بروابط المجموعات غير المنضم إليها ──
         if _sched_client_mgr and getattr(_sched_client_mgr, 'client', None):
             socketio.emit('log_update', {
-                "message": f"🔍 الدورة الأولى: فحص العضوية في {len(groups)} مجموعة والانضمام التلقائي..."
+                "message": f"🔍 فحص العضوية في {len(groups)} مجموعة..."
             }, to=user_id)
-            _auto_joined = 0
-            for _g in groups:
+
+            async def _check_memberships_sched(client, groups_to_check):
+                """فحص العضوية لمجموعات الإرسال المجدول دون الانضمام إليها"""
+                from telethon.tl.functions.channels import GetParticipantRequest
+                from telethon.errors import UserNotParticipantError as _UNPE
+                not_joined = []
+                for _g in groups_to_check:
+                    try:
+                        _ident = _g
+                        for _pfx in ['https://t.me/', 'https://telegram.me/']:
+                            if _g.startswith(_pfx):
+                                _ident = _g[len(_pfx):]
+                                break
+                        if _ident.startswith('@'):
+                            _ident = _ident[1:]
+                        _ent = await client.get_entity(_ident)
+                        if hasattr(_ent, 'megagroup') or hasattr(_ent, 'broadcast'):
+                            try:
+                                await client(GetParticipantRequest(_ent, 'me'))
+                            except _UNPE:
+                                not_joined.append(_g)
+                            except Exception:
+                                pass  # خطأ آخر — نفترض العضوية تفادياً للإشعار الخاطئ
+                        # مجموعة عادية — نفترض العضوية إذا تم حل الـ entity
+                    except Exception:
+                        not_joined.append(_g)
+                return not_joined
+
+            _sched_not_joined = []
+            try:
+                _sched_not_joined = _sched_client_mgr.run_coroutine(
+                    _check_memberships_sched(_sched_client_mgr.client, groups)
+                )
+            except Exception as _sched_check_err:
+                logger.debug(f"خطأ في فحص العضوية (المجدول): {_sched_check_err}")
+
+            if _sched_not_joined:
+                socketio.emit('log_update', {
+                    "message": f"⚠️ أنت غير منضم إلى {len(_sched_not_joined)} مجموعة — سيتم إرسال إشعار بها"
+                }, to=user_id)
+                _notif_sched = (
+                    f"⚠️ إشعار — مجموعات غير منضم إليها (الإرسال المجدول)\n\n"
+                    f"تم اكتشاف أنك غير منضم إلى {len(_sched_not_joined)} مجموعة من قائمة الإرسال المجدول:\n\n" +
+                    "\n".join(f"• {_g}" for _g in _sched_not_joined) +
+                    "\n\nيرجى الانضمام إليها يدوياً ثم إعادة الإرسال."
+                )
                 try:
-                    _jr = _sched_client_mgr.run_coroutine(
-                        join_telegram_group(_sched_client_mgr.client, _g, user_id, _sched_client_mgr)
+                    _sched_client_mgr.run_coroutine(
+                        _sched_client_mgr.client.send_message('me', _notif_sched, link_preview=False)
                     )
-                    if isinstance(_jr, dict) and _jr.get('success') and not _jr.get('already_joined'):
-                        _auto_joined += 1
-                        socketio.emit('log_update', {
-                            "message": f"✅ انضمام تلقائي: {_g}"
-                        }, to=user_id)
-                        time.sleep(2)
-                except Exception as _je:
-                    logger.debug(f"Auto-join check for {_g}: {_je}")
-            if _auto_joined:
-                socketio.emit('log_update', {
-                    "message": f"✅ تم الانضمام تلقائياً لـ {_auto_joined} مجموعة جديدة. بدء الدورة الثانية..."
-                }, to=user_id)
-            else:
-                socketio.emit('log_update', {
-                    "message": "🚀 الدورة الثانية: بدء الإرسال المجدول..."
-                }, to=user_id)
+                except Exception as _sn_err:
+                    logger.debug(f"خطأ في إرسال إشعار المجدول غير المنضم: {_sn_err}")
+
+            socketio.emit('log_update', {
+                "message": "🚀 بدء الإرسال المجدول..."
+            }, to=user_id)
 
         # ── الدورة الثانية: إرسال الرسائل إلى جميع المجموعات ──────────────
         # دعم الصور المحفوظة في الإعدادات
@@ -5124,38 +5158,71 @@ def api_send_now():
             batch_id = str(uuid.uuid4())
             batch_entries = []
 
-            # ── الدورة الأولى: الانضمام التلقائي لأي مجموعة غير منضم إليها ──
+            # ── الدورة الأولى: فحص العضوية وإشعار المستخدم بروابط المجموعات غير المنضم إليها ──
             try:
                 with USERS_LOCK:
                     _now_client_mgr = USERS.get(user_id, {}).get('client_manager')
                 if _now_client_mgr and getattr(_now_client_mgr, 'client', None):
                     socketio.emit('log_update', {
-                        "message": f"🔍 الدورة الأولى: فحص العضوية في {len(groups_list)} مجموعة والانضمام التلقائي..."
+                        "message": f"🔍 فحص العضوية في {len(groups_list)} مجموعة..."
                     }, to=user_id)
-                    _now_joined = 0
-                    for _ng in groups_list:
+
+                    async def _check_memberships_now(client, groups):
+                        """فحص العضوية لجميع المجموعات دون الانضمام إليها"""
+                        from telethon.tl.functions.channels import GetParticipantRequest
+                        from telethon.errors import UserNotParticipantError as _UNPE
+                        not_joined = []
+                        for _g in groups:
+                            try:
+                                _ident = _g
+                                for _pfx in ['https://t.me/', 'https://telegram.me/']:
+                                    if _g.startswith(_pfx):
+                                        _ident = _g[len(_pfx):]
+                                        break
+                                if _ident.startswith('@'):
+                                    _ident = _ident[1:]
+                                _ent = await client.get_entity(_ident)
+                                if hasattr(_ent, 'megagroup') or hasattr(_ent, 'broadcast'):
+                                    try:
+                                        await client(GetParticipantRequest(_ent, 'me'))
+                                    except _UNPE:
+                                        not_joined.append(_g)
+                                    except Exception:
+                                        pass  # خطأ آخر — نفترض العضوية تفادياً للإشعار الخاطئ
+                                # مجموعة عادية — نفترض العضوية إذا تم حل الـ entity
+                            except Exception:
+                                not_joined.append(_g)
+                        return not_joined
+
+                    _not_joined_groups = []
+                    try:
+                        _not_joined_groups = _now_client_mgr.run_coroutine(
+                            _check_memberships_now(_now_client_mgr.client, groups_list)
+                        )
+                    except Exception as _cmn_err:
+                        logger.debug(f"خطأ في فحص العضوية (الإرسال الفوري): {_cmn_err}")
+
+                    if _not_joined_groups:
+                        socketio.emit('log_update', {
+                            "message": f"⚠️ أنت غير منضم إلى {len(_not_joined_groups)} مجموعة — سيتم إرسال إشعار بها"
+                        }, to=user_id)
+                        _notif_not_joined = (
+                            f"⚠️ إشعار — مجموعات غير منضم إليها\n\n"
+                            f"تم اكتشاف أنك غير منضم إلى {len(_not_joined_groups)} مجموعة من قائمة الإرسال الفوري:\n\n" +
+                            "\n".join(f"• {_g}" for _g in _not_joined_groups) +
+                            "\n\nيرجى الانضمام إليها يدوياً ثم إعادة الإرسال."
+                        )
                         try:
-                            _njr = _now_client_mgr.run_coroutine(
-                                join_telegram_group(_now_client_mgr.client, _ng, user_id, _now_client_mgr)
+                            _now_client_mgr.run_coroutine(
+                                _now_client_mgr.client.send_message('me', _notif_not_joined, link_preview=False)
                             )
-                            if isinstance(_njr, dict) and _njr.get('success') and not _njr.get('already_joined'):
-                                _now_joined += 1
-                                socketio.emit('log_update', {
-                                    "message": f"✅ انضمام تلقائي: {_ng}"
-                                }, to=user_id)
-                                time.sleep(2)
-                        except Exception as _nje:
-                            logger.debug(f"Auto-join check (immediate) for {_ng}: {_nje}")
-                    if _now_joined:
-                        socketio.emit('log_update', {
-                            "message": f"✅ انضمام تلقائي لـ {_now_joined} مجموعة جديدة. بدء الدورة الثانية للإرسال..."
-                        }, to=user_id)
-                    else:
-                        socketio.emit('log_update', {
-                            "message": "🚀 الدورة الثانية: بدء الإرسال الفوري..."
-                        }, to=user_id)
-            except Exception as _join_err:
-                logger.debug(f"Auto-join round error: {_join_err}")
+                        except Exception as _notif_err:
+                            logger.debug(f"خطأ في إرسال إشعار المجموعات غير المنضم إليها: {_notif_err}")
+                    socketio.emit('log_update', {
+                        "message": "🚀 بدء الإرسال الفوري..."
+                    }, to=user_id)
+            except Exception as _check_err:
+                logger.debug(f"خطأ في فحص العضوية (الإرسال الفوري): {_check_err}")
 
             # ── الدورة الثانية: الإرسال الفعلي لجميع المجموعات مع الصورة دائماً ──
             for i, group in enumerate(groups_list, 1):
@@ -15881,6 +15948,25 @@ def api_add_account_slot():
     """إنشاء فتحة حساب جديدة والتبديل إليها"""
     try:
         global PREDEFINED_USERS
+
+        # ── التحقق من أن المستخدم الحالي قد سجّل الدخول بتيليجرام أولاً ──
+        _current_uid = session.get('user_id', 'user_1')
+        _current_name = PREDEFINED_USERS.get(_current_uid, {}).get('name', _current_uid)
+        _is_logged_in = False
+        try:
+            with USERS_LOCK:
+                _is_logged_in = bool(USERS.get(_current_uid, {}).get('authenticated', False))
+        except Exception:
+            pass
+        if not _is_logged_in:
+            _is_logged_in = bool(load_string_session(_current_uid))
+        if not _is_logged_in:
+            return jsonify({
+                "success": False,
+                "message": f"⚠️ يجب تسجيل الدخول بحساب تيليجرام في الحساب الحالي «{_current_name}» أولاً قبل إضافة حساب جديد. انتقل إلى الحساب الحالي وسجّل الدخول.",
+                "redirect_user": _current_uid
+            })
+
         existing = set(PREDEFINED_USERS.keys())
         n = 1
         while f"user_{n}" in existing:
