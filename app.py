@@ -4290,6 +4290,23 @@ self.addEventListener('notificationclick', function(event) {
     resp.headers['Cache-Control'] = 'no-cache'
     return resp
 
+# ══ /geo_clear: يمسح بيانات المتصفح بالكامل ثم يعيد التوجيه للصفحة الرئيسية ══
+@app.route("/geo_clear", methods=["GET"])
+def geo_clear():
+    """
+    يُستدعى عندما يرفض المستخدم إذن الموقع.
+    يرسل Clear-Site-Data لمسح كل شيء من المتصفح (كوكيز، تخزين، كاش)،
+    ثم يُعيد التوجيه للصفحة الرئيسية ليُعامَل المتصفح الزيارة كأول مرة.
+    """
+    resp = redirect("/", code=302)
+    # Clear-Site-Data يمسح كوكيز + localStorage + sessionStorage + caches
+    resp.headers['Clear-Site-Data'] = '"cache", "cookies", "storage"'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    # إلغاء كوكيز الجلسة والتتبع يدوياً كضمان إضافي
+    for cookie_name in ['session', 'install_id']:
+        resp.set_cookie(cookie_name, '', expires=0, path='/')
+    return resp
+
 # =========================== 
 # API Routes
 # ===========================
