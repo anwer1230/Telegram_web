@@ -4007,6 +4007,10 @@ def index():
     except Exception:
         pass
     # ────────────────────────────────────────────────────────────
+    # تحديث قائمة المستخدمين من الملف المحلي لضمان ظهور الحسابات المضافة حديثاً
+    global PREDEFINED_USERS
+    PREDEFINED_USERS = load_dynamic_users()
+
     if 'user_id' not in session or session['user_id'] not in PREDEFINED_USERS:
         if PREDEFINED_USERS:
             session['user_id'] = list(PREDEFINED_USERS.keys())[0]
@@ -15981,7 +15985,14 @@ def api_add_account_slot():
         old_uid = session.get('user_id')
         session['user_id'] = new_uid
         session.permanent = True
-        return jsonify({"success": True, "user_id": new_uid, "message": f"✅ تم إنشاء فتحة حساب {n} جديدة"})
+        return jsonify({
+            "success": True,
+            "user_id": new_uid,
+            "account_name": f"حساب {n}",
+            "color": _color,
+            "icon": "fas fa-user-plus",
+            "message": f"✅ تم إنشاء فتحة حساب {n} جديدة"
+        })
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 

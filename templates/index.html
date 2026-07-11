@@ -9275,11 +9275,68 @@ async function doAddAccountSlot() {
         });
         const d = await r.json();
         if (d.success) {
+            const newUid   = d.user_id;
+            const newName  = d.account_name || 'حساب جديد';
+            const newColor = d.color        || '#6366f1';
+            const newIcon  = d.icon         || 'fas fa-user-plus';
+
+            // ── إنشاء تبويب الحساب الجديد ديناميكياً ──
+            const addBtnWrap = document.querySelector('.user-tab[onclick*="doAddAccountSlot"]')?.closest('div[style]');
+            const newTabDiv  = document.createElement('div');
+            newTabDiv.style.cssText = 'position:relative;display:inline-block;margin:2px;';
+            newTabDiv.innerHTML = `
+                <button class="btn user-tab"
+                        id="userTab_${newUid}"
+                        data-user-id="${newUid}"
+                        data-default-name="${newName}"
+                        style="color:${newColor};border-color:${newColor};">
+                    <i class="${newIcon} me-2"></i>
+                    <span class="user-tab-name">${newName}</span>
+                </button>`;
+            if (addBtnWrap) {
+                addBtnWrap.parentNode.insertBefore(newTabDiv, addBtnWrap);
+            } else {
+                const container = document.querySelector('.users-bar .d-flex');
+                if (container) container.insertBefore(newTabDiv, container.lastElementChild);
+            }
+
+            // ── ربط حدث النقر على التبويب الجديد ──
+            const newTabBtn = newTabDiv.querySelector('.user-tab');
+            if (newTabBtn) {
+                newTabBtn.addEventListener('click', async function() {
+                    if (newTabBtn.classList.contains('active')) return;
+                    const fromId = (typeof globalCurrentUserId !== 'undefined') ? globalCurrentUserId : '';
+                    const rs = await postJSON('/api/switch_user', { user_id: newUid });
+                    if (rs && rs.success) {
+                        if (typeof globalCurrentUserId !== 'undefined') globalCurrentUserId = newUid;
+                        document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
+                        newTabBtn.classList.add('active');
+                        if (window.socket && window.socket.connected)
+                            window.socket.emit('switch_user', { user_id: newUid, from_user_id: fromId });
+                        if (typeof updateLoggedInUI === 'function') updateLoggedInUI(false);
+                        if (typeof updateCurrentUserDisplay === 'function')
+                            updateCurrentUserDisplay(newName, null, newColor, null);
+                    }
+                });
+            }
+
+            // ── التبديل التلقائي إلى الحساب الجديد فور الإنشاء ──
+            const fromId = (typeof globalCurrentUserId !== 'undefined') ? globalCurrentUserId : '';
+            const sw = await postJSON('/api/switch_user', { user_id: newUid });
+            if (sw && sw.success) {
+                if (typeof globalCurrentUserId !== 'undefined') globalCurrentUserId = newUid;
+                document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
+                if (newTabBtn) newTabBtn.classList.add('active');
+                if (window.socket && window.socket.connected)
+                    window.socket.emit('switch_user', { user_id: newUid, from_user_id: fromId });
+                if (typeof updateLoggedInUI === 'function') updateLoggedInUI(false);
+                if (typeof updateCurrentUserDisplay === 'function')
+                    updateCurrentUserDisplay(newName, null, newColor, null);
+            }
+
             showToast('✅ ' + d.message + ' — سجّل دخولك بتيليجرام للحساب الجديد');
-            // إعادة تحميل الصفحة ثم التمرير لنموذج الدخول
-            setTimeout(() => {
-                location.href = location.pathname + '?scroll_login=1';
-            }, 700);
+            // التمرير إلى نموذج الدخول
+            setTimeout(scrollToLoginForm, 600);
         } else {
             showToast('❌ ' + d.message);
         }
