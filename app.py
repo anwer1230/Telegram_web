@@ -14974,8 +14974,12 @@ def admin_toggle_card_system():
     if not session.get("admin_auth"):
         return jsonify({"success": False, "message": "غير مخول"}), 403
     data_req = request.json or {}
-    enabled = bool(data_req.get("enabled", True))
     cards = load_cards_data()
+    # إذا أُرسل حقل enabled صراحةً استخدمه، وإلا عكس الحالة الحالية
+    if "enabled" in data_req:
+        enabled = bool(data_req["enabled"])
+    else:
+        enabled = not bool(cards.get("card_system_enabled", False))
     cards["card_system_enabled"] = enabled
     save_cards_data(cards)
     status_text = "تفعيل" if enabled else "تعطيل"
