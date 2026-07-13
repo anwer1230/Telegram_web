@@ -301,8 +301,19 @@ def register_admin_routes(app, get_admin_auth_func, predefined_users, users_dict
     def admin_get_installations():
         if not get_admin_auth_func():
             return _unauthorized()
+        import re as _re
         data = load_user_sessions()
-        return jsonify({"success": True, "installations": data.get("installations", [])})
+        all_insts = data.get("installations", [])
+        # ── فلترة التثبيتات الوهمية: استبعاد السجلات ذات IP محلي/مجهول ──
+        _fake_ip = _re.compile(
+            r'^(127\.|0\.0\.0\.|::1$|localhost$|^$|unknown|—|غير\s*معروف)'
+        )
+        real_insts = [
+            i for i in all_insts
+            if i.get("install_id")  # يجب أن يكون للتثبيت معرّف
+            and not _fake_ip.match(str(i.get("ip", "127.0.0.1")))
+        ]
+        return jsonify({"success": True, "installations": real_insts})
 
     @app.route("/admin/api/installation_details/<install_id>", methods=["GET"])
     def admin_get_installation_details(install_id):

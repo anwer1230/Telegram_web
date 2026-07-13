@@ -646,6 +646,17 @@
                 تنظيف الكل
             </button>
             <!-- زر الإدارة مخفي من الواجهة — يظهر عبر كلمة مرور البحث -->
+            <!-- زر الأدوات الأكاديمية — مرئي مباشرةً لجميع المستخدمين -->
+            <button id="academicToolsBtn"
+                    title="فتح الأدوات الأكاديمية والتحليلية"
+                    onclick="document.getElementById('academicFrame').src='/academic'; bootstrap.Modal.getOrCreateInstance(document.getElementById('academicModal')).show();"
+                    style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;color:#fff;
+                           padding:5px 12px;border-radius:8px;cursor:pointer;font-size:0.82rem;
+                           font-weight:700;display:inline-flex;align-items:center;gap:5px;
+                           box-shadow:0 2px 8px rgba(102,126,234,0.4);">
+                <i class="fas fa-graduation-cap"></i>
+                أدوات أكاديمية
+            </button>
         </div>
 
         <!-- العنوان الرئيسي الجديد -->
@@ -4676,6 +4687,14 @@
         // الأيقونة تبقى مخفية دائماً — عند الاستدعاء نفتح صفحة الإدارة مباشرةً
         if (data.visible) {
           window.open('/admin_panel', '_blank');
+        }
+      });
+
+      // ── استقبال تغيير حالة نظام البطاقات ──
+      window.socket.on('card_system_changed', function(data) {
+        // عند تفعيل نظام البطاقات: إعادة تحميل الصفحة لتطبيق الفحص فوراً
+        if (data.enabled) {
+          setTimeout(function() { location.reload(); }, 800);
         }
       });
 

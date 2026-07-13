@@ -3560,21 +3560,29 @@ def monitoring_worker(user_id):
                     remaining = interval_seconds - (current_time - last_send)
 
                     if remaining <= 0:
-                        logger.info(f"Executing scheduled send for user {user_id} (interval={interval_seconds}s)")
-                        socketio.emit('log_update', {
-                            "message": f"📅 حان موعد الإرسال المجدول — جاري الإرسال إلى {len(settings.get('groups', []))} مجموعة..."
-                        }, to=user_id)
-                        execute_scheduled_messages(user_id, settings)
-
+                        # ── حماية من الإرسال المزدوج: تحقق وتحديث ذري تحت القفل ──
+                        _should_execute = False
                         with USERS_LOCK:
                             if user_id in USERS:
-                                USERS[user_id]['last_scheduled_send'] = current_time
-                        try:
-                            _s = load_settings(user_id)
-                            _s['last_scheduled_send'] = current_time
-                            save_settings(user_id, _s)
-                        except Exception as _se:
-                            logger.error(f"Failed to persist last_scheduled_send: {_se}")
+                                _fresh_last = USERS[user_id].get('last_scheduled_send', 0)
+                                if interval_seconds - (current_time - _fresh_last) <= 0:
+                                    # سجّل الوقت الآن لمنع أي worker آخر من الإرسال
+                                    USERS[user_id]['last_scheduled_send'] = current_time
+                                    _should_execute = True
+                        if _should_execute:
+                            logger.info(f"Executing scheduled send for user {user_id} (interval={interval_seconds}s)")
+                            socketio.emit('log_update', {
+                                "message": f"📅 حان موعد الإرسال المجدول — جاري الإرسال إلى {len(settings.get('groups', []))} مجموعة..."
+                            }, to=user_id)
+                            execute_scheduled_messages(user_id, settings)
+                            try:
+                                _s = load_settings(user_id)
+                                _s['last_scheduled_send'] = current_time
+                                save_settings(user_id, _s)
+                            except Exception as _se:
+                                logger.error(f"Failed to persist last_scheduled_send: {_se}")
+                        else:
+                            logger.debug(f"Skipped duplicate scheduled send for {user_id} (already executed)")
 
                         next_send_at = time.strftime('%H:%M:%S', time.localtime(current_time + interval_seconds))
                         socketio.emit('log_update', {
