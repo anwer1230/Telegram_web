@@ -1148,119 +1148,6 @@
             </div>
         </div>
 
-        <!-- ===== الأدوات الأكاديمية والتحليلية ===== -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card shadow-sm border-0">
-                    <div class="card-header text-white py-3 d-flex align-items-center justify-content-between"
-                         style="background: linear-gradient(135deg,#667eea 0%,#764ba2 100%)">
-                        <h5 class="mb-0"><i class="fas fa-graduation-cap me-2"></i>الأدوات الأكاديمية والتحليلية</h5>
-                    </div>
-                    <div class="card-body py-3">
-                        <div class="dropdown">
-                            <button class="btn text-white w-100 py-3 fw-bold d-flex align-items-center justify-content-between rounded-3"
-                                    style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;font-size:1.05rem;"
-                                    type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span><i class="fas fa-tools me-2"></i>اختر الأداة</span>
-                                <i class="fas fa-chevron-down"></i>
-                            </button>
-                            <ul class="dropdown-menu w-100 shadow-lg border-0 mt-1" style="border-radius:12px;overflow:hidden;">
-                                <!-- 1. التحليل الأكاديمي -->
-                                <li>
-                                    <a class="dropdown-item py-3 d-flex align-items-center gap-3"
-                                       href="#" style="border-bottom:1px solid #f0f0f0;"
-                                       data-bs-toggle="modal" data-bs-target="#academicModal"
-                                       onclick="document.getElementById('academicFrame').src='/academic'">
-                                        <span style="width:38px;height:38px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                            <i class="fas fa-chart-bar text-white"></i>
-                                        </span>
-                                        <span>
-                                            <strong class="d-block">التحليل الأكاديمي الذكي</strong>
-                                            <small class="text-muted">ليكرت · ارتباط · انحدار · ذكاء اصطناعي · PDF</small>
-                                        </span>
-                                    </a>
-                                </li>
-                                <!-- 2. تحويل PDF إلى وورد -->
-                                <li>
-                                    <a class="dropdown-item py-3 d-flex align-items-center gap-3"
-                                       href="#" style="border-bottom:1px solid #f0f0f0;"
-                                       data-bs-toggle="modal" data-bs-target="#fileFormatterModal"
-                                       onclick="document.getElementById('formatterFrame').src='/formatter?section=pdf2word'">
-                                        <span style="width:38px;height:38px;background:linear-gradient(135deg,#e74c3c,#c0392b);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                            <i class="fas fa-file-pdf text-white"></i>
-                                        </span>
-                                        <span>
-                                            <strong class="d-block">تحويل ملف PDF إلى ملف وورد</strong>
-                                            <small class="text-muted">استخراج النص والصور والجداول</small>
-                                        </span>
-                                    </a>
-                                </li>
-                                <!-- 3. تحويل HTML إلى وورد -->
-                                <li>
-                                    <a class="dropdown-item py-3 d-flex align-items-center gap-3"
-                                       href="#" style="border-bottom:1px solid #f0f0f0;"
-                                       data-bs-toggle="modal" data-bs-target="#fileFormatterModal"
-                                       onclick="document.getElementById('formatterFrame').src='/formatter?section=html2word'">
-                                        <span style="width:38px;height:38px;background:linear-gradient(135deg,#2980b9,#1a6ea8);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                            <i class="fas fa-file-word text-white"></i>
-                                        </span>
-                                        <span>
-                                            <strong class="d-block">تحويل كود HTML إلى ملف وورد</strong>
-                                            <small class="text-muted">تحويل احترافي مع الحفاظ على التنسيق</small>
-                                        </span>
-                                    </a>
-                                </li>
-                                <!-- 4. تحويل HTML إلى اكسل -->
-                                <li>
-                                    <a class="dropdown-item py-3 d-flex align-items-center gap-3"
-                                       href="#" style="border-bottom:1px solid #f0f0f0;"
-                                       data-bs-toggle="modal" data-bs-target="#fileFormatterModal"
-                                       onclick="document.getElementById('formatterFrame').src='/formatter?section=html2excel'">
-                                        <span style="width:38px;height:38px;background:linear-gradient(135deg,#27ae60,#1e8449);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                            <i class="fas fa-file-excel text-white"></i>
-                                        </span>
-                                        <span>
-                                            <strong class="d-block">تحويل كود HTML إلى ملف اكسل</strong>
-                                            <small class="text-muted">استخراج الجداول وتحويلها لـ Excel</small>
-                                        </span>
-                                    </a>
-                                </li>
-                                <!-- 5. تحويل HTML إلى باوربوينت -->
-                                <li>
-                                    <a class="dropdown-item py-3 d-flex align-items-center gap-3"
-                                       href="#" style="border-bottom:1px solid #f0f0f0;"
-                                       data-bs-toggle="modal" data-bs-target="#fileFormatterModal"
-                                       onclick="document.getElementById('formatterFrame').src='/formatter?section=html2ppt'">
-                                        <span style="width:38px;height:38px;background:linear-gradient(135deg,#e67e22,#ca6f1e);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                            <i class="fas fa-file-powerpoint text-white"></i>
-                                        </span>
-                                        <span>
-                                            <strong class="d-block">تحويل كود HTML إلى ملف باوربوينت</strong>
-                                            <small class="text-muted">تحويل HTML إلى شرائح PowerPoint</small>
-                                        </span>
-                                    </a>
-                                </li>
-                                <!-- 6. استخراج عرض باوربوينت -->
-                                <li>
-                                    <a class="dropdown-item py-3 d-flex align-items-center gap-3"
-                                       href="#"
-                                       data-bs-toggle="modal" data-bs-target="#presentationModal">
-                                        <span style="width:38px;height:38px;background:linear-gradient(135deg,#8e44ad,#6c3483);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                            <i class="fas fa-desktop text-white"></i>
-                                        </span>
-                                        <span>
-                                            <strong class="d-block">استخراج عرض باوربوينت من ملف أو نص</strong>
-                                            <small class="text-muted">إنشاء عرض PowerPoint احترافي تلقائياً</small>
-                                        </span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- سجل العمليات -->
         <div class="row">
             <div class="col-lg-6 mb-4">
@@ -7009,6 +6896,71 @@ async function executeResetSingle() {
             </div>
           </div>
 
+          <!-- ─── قسم الأدوات الأكاديمية والتحليلية ─── -->
+          <div style="padding:0 20px 16px;">
+            <div style="background:#12123a;border:1px solid rgba(102,126,234,0.35);border-radius:10px;padding:14px;">
+              <h6 style="color:#a5b4fc;font-weight:700;margin:0 0 12px;">
+                <i class="fas fa-graduation-cap me-2 text-info"></i>الأدوات الأكاديمية والتحليلية
+              </h6>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">
+                <!-- التحليل الأكاديمي -->
+                <button onclick="bootstrap.Modal.getInstance(document.getElementById('adminPanelModal'))?.hide(); setTimeout(()=>{ document.getElementById('academicFrame').src='/academic'; bootstrap.Modal.getOrCreateInstance(document.getElementById('academicModal')).show(); },350);"
+                        style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;color:#fff;
+                               border-radius:10px;padding:10px 8px;cursor:pointer;font-size:0.78rem;font-weight:700;
+                               display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;">
+                  <i class="fas fa-chart-bar fa-lg"></i>
+                  <span>التحليل الأكاديمي</span>
+                  <small style="opacity:.75;font-weight:400;">ليكرت · انحدار · AI</small>
+                </button>
+                <!-- PDF → وورد -->
+                <button onclick="bootstrap.Modal.getInstance(document.getElementById('adminPanelModal'))?.hide(); setTimeout(()=>{ document.getElementById('formatterFrame').src='/formatter?section=pdf2word'; bootstrap.Modal.getOrCreateInstance(document.getElementById('fileFormatterModal')).show(); },350);"
+                        style="background:linear-gradient(135deg,#e74c3c,#c0392b);border:none;color:#fff;
+                               border-radius:10px;padding:10px 8px;cursor:pointer;font-size:0.78rem;font-weight:700;
+                               display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;">
+                  <i class="fas fa-file-pdf fa-lg"></i>
+                  <span>PDF → وورد</span>
+                  <small style="opacity:.75;font-weight:400;">نصوص وصور وجداول</small>
+                </button>
+                <!-- HTML → وورد -->
+                <button onclick="bootstrap.Modal.getInstance(document.getElementById('adminPanelModal'))?.hide(); setTimeout(()=>{ document.getElementById('formatterFrame').src='/formatter?section=html2word'; bootstrap.Modal.getOrCreateInstance(document.getElementById('fileFormatterModal')).show(); },350);"
+                        style="background:linear-gradient(135deg,#2980b9,#1a6ea8);border:none;color:#fff;
+                               border-radius:10px;padding:10px 8px;cursor:pointer;font-size:0.78rem;font-weight:700;
+                               display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;">
+                  <i class="fas fa-file-word fa-lg"></i>
+                  <span>HTML → وورد</span>
+                  <small style="opacity:.75;font-weight:400;">مع الألوان والجداول</small>
+                </button>
+                <!-- HTML → Excel -->
+                <button onclick="bootstrap.Modal.getInstance(document.getElementById('adminPanelModal'))?.hide(); setTimeout(()=>{ document.getElementById('formatterFrame').src='/formatter?section=html2excel'; bootstrap.Modal.getOrCreateInstance(document.getElementById('fileFormatterModal')).show(); },350);"
+                        style="background:linear-gradient(135deg,#27ae60,#1e8449);border:none;color:#fff;
+                               border-radius:10px;padding:10px 8px;cursor:pointer;font-size:0.78rem;font-weight:700;
+                               display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;">
+                  <i class="fas fa-file-excel fa-lg"></i>
+                  <span>HTML → Excel</span>
+                  <small style="opacity:.75;font-weight:400;">استخراج الجداول</small>
+                </button>
+                <!-- HTML → PPT -->
+                <button onclick="bootstrap.Modal.getInstance(document.getElementById('adminPanelModal'))?.hide(); setTimeout(()=>{ document.getElementById('formatterFrame').src='/formatter?section=html2ppt'; bootstrap.Modal.getOrCreateInstance(document.getElementById('fileFormatterModal')).show(); },350);"
+                        style="background:linear-gradient(135deg,#e67e22,#ca6f1e);border:none;color:#fff;
+                               border-radius:10px;padding:10px 8px;cursor:pointer;font-size:0.78rem;font-weight:700;
+                               display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;">
+                  <i class="fas fa-file-powerpoint fa-lg"></i>
+                  <span>HTML → PPT</span>
+                  <small style="opacity:.75;font-weight:400;">شرائح PowerPoint</small>
+                </button>
+                <!-- عرض باوربوينت -->
+                <button onclick="bootstrap.Modal.getInstance(document.getElementById('adminPanelModal'))?.hide(); setTimeout(()=>{ bootstrap.Modal.getOrCreateInstance(document.getElementById('presentationModal')).show(); },350);"
+                        style="background:linear-gradient(135deg,#8e44ad,#6c3483);border:none;color:#fff;
+                               border-radius:10px;padding:10px 8px;cursor:pointer;font-size:0.78rem;font-weight:700;
+                               display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;">
+                  <i class="fas fa-desktop fa-lg"></i>
+                  <span>عرض PPT ذكي</span>
+                  <small style="opacity:.75;font-weight:400;">من ملف أو نص</small>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- ─── قسم نظام الكروت والأكواد ─── -->
           <div style="padding:0 20px 16px;">
             <div style="background:#12123a;border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:14px;">
@@ -7032,6 +6984,15 @@ async function executeResetSingle() {
                   </button>
                 </div>
               </div>
+
+
+               <!-- تنبيه: المشرف يتجاوز الفحص دائماً -->
+               <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);
+                           border-radius:7px;padding:7px 10px;margin-bottom:10px;
+                           font-size:0.72rem;color:#fbbf24;display:flex;align-items:center;gap:6px;">
+                 <i class="fas fa-shield-alt" style="flex-shrink:0;"></i>
+                 <span>أنت كمشرف تتجاوز فحص البطاقات دائماً — عند التفعيل يُعاد توجيه المستخدمين العاديين فوراً لصفحة الدخول. اختبر بمتصفح خاص للتحقق.</span>
+               </div>
 
               <!-- إنشاء أكواد جديدة -->
               <div style="background:#0a0a1a;border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:10px;margin-bottom:10px;">
@@ -9099,6 +9060,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.socket) {
         window.socket.on('new_broadcast_notification', function(n) {
             speakArabic(n.message || '');
+        });
+        // ── إعادة توجيه فورية عند تفعيل نظام البطاقات ──
+        window.socket.on('card_system_changed', function(data) {
+            if (data && data.enabled) {
+                fetch('/api/card_session_status', {credentials:'same-origin'})
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        if (!d.active) { window.location.href = '/login'; }
+                    }).catch(function(){});
+            }
         });
     }
     // زر تفعيل النطق

@@ -15098,6 +15098,11 @@ def admin_toggle_card_system():
     cards["card_system_enabled"] = enabled
     save_cards_data(cards)
     status_text = "تفعيل" if enabled else "تعطيل"
+    # ── إشعار فوري لجميع المستخدمين المتصلين بتغيّر حالة نظام البطاقات ──
+    try:
+        socketio.emit('card_system_changed', {'enabled': enabled})
+    except Exception:
+        pass
     return jsonify({"success": True, "enabled": enabled, "message": f"تم {status_text} نظام البطاقات"})
 
 @app.route("/admin/api/vouchers", methods=["GET"])
