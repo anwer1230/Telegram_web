@@ -9433,8 +9433,192 @@ async function deleteDynUser(user_id) {
         else showToast('❌ ' + d.message);
     } catch(e) { showToast('❌ خطأ في الاتصال'); }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// وظيفة التعليمات التفاعلية — Guided Tutorial System
+// ══════════════════════════════════════════════════════════════════
+var _tutSteps = [], _tutIdx = 0, _tutActive = false;
+
+async function tutorialInit(forceShow) {
+    try {
+        var r = await fetch('/api/tutorial/steps');
+        var d = await r.json();
+        if (!d.success || !d.enabled) return;
+        _tutSteps = (d.steps || []).filter(function(s){ return s.title || s.text; });
+        if (!_tutSteps.length) return;
+        if (!forceShow && localStorage.getItem('tut_done_v1') === '1') return;
+        tutorialStart();
+    } catch(e) { console.warn('tutorial init:', e); }
+}
+
+function tutorialStart() {
+    _tutIdx = 0;
+    _tutActive = true;
+    document.getElementById('tutorialOverlay').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    _tutShowStep(0);
+}
+
+function tutorialClose() {
+    _tutActive = false;
+    document.getElementById('tutorialOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    localStorage.setItem('tut_done_v1', '1');
+}
+
+function tutorialNext() {
+    if (_tutIdx < _tutSteps.length - 1) { _tutIdx++; _tutShowStep(_tutIdx); }
+    else tutorialClose();
+}
+
+function tutorialPrev() {
+    if (_tutIdx > 0) { _tutIdx--; _tutShowStep(_tutIdx); }
+}
+
+function openTutorial() {
+    if (_tutSteps.length) tutorialStart();
+    else tutorialInit(true);
+}
+
+function _tutShowStep(idx) {
+    var step = _tutSteps[idx];
+    if (!step) return;
+    document.getElementById('_tutCounter').textContent = (idx + 1) + ' / ' + _tutSteps.length;
+    document.getElementById('_tutTitle').textContent = step.title || '';
+    document.getElementById('_tutText').textContent  = step.text  || '';
+    var prevBtn = document.getElementById('_tutPrev');
+    var nextBtn = document.getElementById('_tutNext');
+    prevBtn.style.display = idx > 0 ? 'inline-flex' : 'none';
+    nextBtn.textContent = idx === _tutSteps.length - 1 ? '✅ إنهاء' : 'التالي ←';
+    var target = step.target ? document.querySelector(step.target) : null;
+    var spotlight = document.getElementById('_tutSpot');
+    var finger    = document.getElementById('_tutFinger');
+    var card      = document.getElementById('_tutCard');
+    if (target) {
+        target.scrollIntoView({behavior:'smooth', block:'center'});
+        spotlight.style.display = 'block';
+        finger.style.display    = 'block';
+        setTimeout(function(){ _tutPosition(target, step.position || 'bottom'); }, 420);
+    } else {
+        spotlight.style.display = 'none';
+        finger.style.display    = 'none';
+        card.style.top  = '50%'; card.style.left = '50%';
+        card.style.transform = 'translate(-50%,-50%)';
+        card.style.right = 'auto'; card.style.bottom = 'auto';
+    }
+}
+
+function _tutPosition(target, pos) {
+    var rect = target.getBoundingClientRect();
+    var sx = window.scrollX, sy = window.scrollY;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var pad = 10, cardW = Math.min(340, vw - 32);
+    var spotlight = document.getElementById('_tutSpot');
+    var finger    = document.getElementById('_tutFinger');
+    var card      = document.getElementById('_tutCard');
+    spotlight.style.left   = (rect.left + sx - pad) + 'px';
+    spotlight.style.top    = (rect.top  + sy - pad) + 'px';
+    spotlight.style.width  = (rect.width  + pad*2) + 'px';
+    spotlight.style.height = (rect.height + pad*2) + 'px';
+    card.style.transform = '';
+    card.style.right = 'auto'; card.style.bottom = 'auto';
+    var cx = rect.left + sx + rect.width/2 - cardW/2;
+    cx = Math.max(12, Math.min(cx, sx + vw - cardW - 12));
+    card.style.left = cx + 'px';
+    card.style.width = cardW + 'px';
+    var above = pos === 'top' || (rect.top > vh * 0.55);
+    if (above) {
+        card.style.top    = Math.max(10, rect.top + sy - 195) + 'px';
+        card.style.bottom = 'auto';
+        finger.style.left = (rect.left + rect.width/2 + sx - 18) + 'px';
+        finger.style.top  = (rect.top  + sy - 52) + 'px';
+        finger.textContent = '👇';
+    } else {
+        card.style.top    = (rect.bottom + sy + 54) + 'px';
+        card.style.bottom = 'auto';
+        finger.style.left = (rect.left + rect.width/2 + sx - 18) + 'px';
+        finger.style.top  = (rect.bottom + sy + 10) + 'px';
+        finger.textContent = '👆';
+    }
+}
+
+// تشغيل تلقائي عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function(){ tutorialInit(false); }, 2000);
+});
 </script>
 <!-- ══════════════════════════════════════════════════════════════ -->
+
+<!-- ══ نظام التعليمات التفاعلي ══════════════════════════════════ -->
+<div id="tutorialOverlay" style="display:none;position:fixed;inset:0;z-index:99990;font-family:'Cairo',sans-serif;">
+    <!-- الطبقة المعتمة خلف الصفحة -->
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.72);" onclick="tutorialClose()"></div>
+
+    <!-- بقعة الضوء على العنصر المستهدف -->
+    <div id="_tutSpot" style="display:none;position:absolute;border-radius:10px;
+         box-shadow:0 0 0 9999px rgba(0,0,0,0.72);
+         transition:all 0.35s cubic-bezier(.4,0,.2,1);pointer-events:none;
+         border:2px solid rgba(167,139,250,0.7);z-index:99991;"></div>
+
+    <!-- أصبع الإشارة -->
+    <div id="_tutFinger" style="display:none;position:absolute;font-size:2.2rem;
+         transition:all 0.35s cubic-bezier(.4,0,.2,1);z-index:99993;pointer-events:none;
+         filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));"></div>
+
+    <!-- بطاقة الخطوة -->
+    <div id="_tutCard" style="position:absolute;
+         background:linear-gradient(145deg,#1e1b4b,#2d2a6e);
+         border:1px solid rgba(139,92,246,0.55);border-radius:22px;
+         padding:26px 28px 22px;max-width:340px;width:340px;
+         box-shadow:0 24px 70px rgba(0,0,0,0.85),0 0 0 1px rgba(139,92,246,0.2);
+         transition:all 0.35s cubic-bezier(.4,0,.2,1);z-index:99995;pointer-events:all;
+         direction:rtl;">
+
+        <!-- رأس البطاقة: عداد + زر إغلاق -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <span id="_tutCounter"
+                  style="background:rgba(139,92,246,0.2);color:#a78bfa;
+                         border-radius:20px;padding:3px 14px;font-size:0.72rem;font-weight:800;
+                         letter-spacing:0.5px;"></span>
+            <button onclick="tutorialClose()"
+                    title="إغلاق التعليمات"
+                    style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);
+                           color:#fca5a5;width:30px;height:30px;border-radius:50%;cursor:pointer;
+                           font-size:0.85rem;display:flex;align-items:center;justify-content:center;
+                           transition:all 0.2s;flex-shrink:0;">✕</button>
+        </div>
+
+        <!-- عنوان الخطوة -->
+        <h5 id="_tutTitle"
+            style="color:#e2e8f0;font-weight:900;margin:0 0 10px;
+                   font-size:1.05rem;line-height:1.4;"></h5>
+
+        <!-- نص الخطوة -->
+        <p id="_tutText"
+           style="color:#cbd5e1;font-size:0.88rem;line-height:1.7;
+                  margin:0 0 22px;"></p>
+
+        <!-- أزرار التنقل -->
+        <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end;">
+            <button id="_tutPrev" onclick="tutorialPrev()"
+                    style="display:none;background:rgba(255,255,255,0.07);
+                           border:1px solid rgba(255,255,255,0.15);color:#94a3b8;
+                           padding:9px 18px;border-radius:11px;cursor:pointer;
+                           font-size:0.84rem;font-weight:700;font-family:'Cairo',sans-serif;
+                           display:none;align-items:center;gap:5px;transition:all 0.2s;">
+                → السابق
+            </button>
+            <button id="_tutNext" onclick="tutorialNext()"
+                    style="background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;
+                           color:#fff;padding:9px 24px;border-radius:11px;cursor:pointer;
+                           font-size:0.84rem;font-weight:800;font-family:'Cairo',sans-serif;
+                           box-shadow:0 4px 16px rgba(124,58,237,0.45);transition:all 0.2s;">
+                التالي ←
+            </button>
+        </div>
+    </div>
+</div>
+<!-- ═══════════════════════════════════════════════════════════════ -->
 
 </body>
 </html>

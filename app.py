@@ -16193,6 +16193,101 @@ def api_list_dynamic_users():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 
+# ══════════════════════════════════════════════════════════════════
+#  وظيفة التعليمات — Tutorial / Onboarding System
+# ══════════════════════════════════════════════════════════════════
+TUTORIAL_FILE = os.path.join(DATA_DIR, "tutorial_steps.json")
+_TUTORIAL_LOCK = threading.Lock()
+
+_DEFAULT_TUTORIAL_STEPS = [
+    {"id": 1,  "target": None,                "title": "🎉 أهلاً بك في أبو مالك!",          "text": "مرحباً! سنأخذك في جولة سريعة لتتعرف على أهم مميزات البرنامج. اضغط «التالي» للبدء.",                                                                "position": "center"},
+    {"id": 2,  "target": "#loginForm",         "title": "🔐 تسجيل الدخول",                    "text": "من هنا تدخل رقم هاتفك مع رمز البلد للاتصال بحسابك على تيليجرام.",                                                                               "position": "bottom"},
+    {"id": 3,  "target": "#phone",             "title": "📱 رقم الهاتف",                      "text": "أدخل رقم هاتفك بصيغة دولية مثل: +966xxxxxxxxx ثم اضغط «دخول».",                                                                                 "position": "bottom"},
+    {"id": 4,  "target": "#message",           "title": "✍️ نص الرسالة",                     "text": "اكتب هنا نص الرسالة التي تريد إرسالها إلى المجموعات.",                                                                                           "position": "top"},
+    {"id": 5,  "target": "#dropZone",          "title": "🖼️ إرفاق صورة",                    "text": "يمكنك سحب وإفلات صورة هنا أو الضغط لاختيار صورة ترسل مع رسالتك.",                                                                                "position": "top"},
+    {"id": 6,  "target": "#groups",            "title": "📋 قائمة المجموعات",                 "text": "الصق روابط مجموعات تيليجرام هنا — رابط في كل سطر. سيتم الإرسال إليها جميعاً.",                                                                    "position": "top"},
+    {"id": 7,  "target": "#sendModeGroup",     "title": "📡 وضع الإرسال",                     "text": "اختر «محدد» للمجموعات المحددة أو «الكل» لجميع مجموعاتك على تيليجرام.",                                                                            "position": "bottom"},
+    {"id": 8,  "target": "#sendType",          "title": "⏱️ نوع الإرسال",                    "text": "اختر «فوري» لإرسال رسالة الآن، أو «مجدول» لتكرار الإرسال تلقائياً بفترات زمنية.",                                                                  "position": "bottom"},
+    {"id": 9,  "target": "#sendNowBtn",        "title": "🚀 إرسال فوري",                      "text": "اضغط هذا الزر لإرسال رسالتك فوراً إلى جميع المجموعات المحددة.",                                                                                  "position": "top"},
+    {"id": 10, "target": "#startMonitoringBtn","title": "🟢 تشغيل المراقبة المجدولة",          "text": "يبدأ نظام الإرسال التلقائي. البرنامج سيرسل الرسائل في الأوقات المحددة تلقائياً.",                                                                   "position": "top"},
+    {"id": 11, "target": "#academicToolsBtn",  "title": "🎓 الأدوات الأكاديمية",              "text": "أدوات متخصصة للمهام الأكاديمية كتحليل الملفات وإعداد التقارير والعروض التقديمية.",                                                                  "position": "bottom"},
+    {"id": 12, "target": "#btnLearningSystem", "title": "🧠 نظام التعلم الذكي",               "text": "يتعلم البرنامج أسلوبك في الردود ويقترح ردوداً ذكية تناسب سياق المحادثة.",                                                                          "position": "bottom"},
+    {"id": 13, "target": "#btnRotatingSystem", "title": "🔄 الرسائل الدورية",                  "text": "إرسال مجموعة رسائل مختلفة بالتناوب — يجعل محتواك متنوعاً وغير متكرر.",                                                                            "position": "bottom"},
+    {"id": 14, "target": "#btnAutoReplies",    "title": "💬 الردود التلقائية",                 "text": "يرد البرنامج تلقائياً على رسائل محددة بردود أنت تحددها مسبقاً.",                                                                                  "position": "bottom"},
+    {"id": 15, "target": None,                 "title": "✅ أنت جاهز تماماً!",                "text": "تعرفت على أهم مميزات البرنامج. يمكنك دائماً إعادة الجولة بالضغط على زر «التعليمات». استمتع بأبو مالك! 🚀",                                        "position": "center"},
+]
+
+def load_tutorial_data():
+    with _TUTORIAL_LOCK:
+        try:
+            if os.path.exists(TUTORIAL_FILE):
+                with open(TUTORIAL_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.error(f"load_tutorial_data error: {e}")
+    return {"enabled": True, "show_on_first_visit": True, "steps": _DEFAULT_TUTORIAL_STEPS}
+
+def save_tutorial_data(data):
+    with _TUTORIAL_LOCK:
+        try:
+            with open(TUTORIAL_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"save_tutorial_data error: {e}")
+            return False
+
+@app.route("/api/tutorial/status", methods=["GET"])
+def api_tutorial_status():
+    data = load_tutorial_data()
+    return jsonify({"success": True, "enabled": data.get("enabled", True),
+                    "show_on_first_visit": data.get("show_on_first_visit", True)})
+
+@app.route("/api/tutorial/steps", methods=["GET"])
+def api_tutorial_steps():
+    data = load_tutorial_data()
+    return jsonify({"success": True,
+                    "steps": data.get("steps", _DEFAULT_TUTORIAL_STEPS),
+                    "enabled": data.get("enabled", True)})
+
+@app.route("/admin/api/tutorial/toggle", methods=["POST"])
+def admin_tutorial_toggle():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    payload = request.get_json(silent=True) or {}
+    enabled = bool(payload.get("enabled", True))
+    data = load_tutorial_data()
+    data["enabled"] = enabled
+    save_tutorial_data(data)
+    try:
+        socketio.emit('tutorial_status_changed', {'enabled': enabled})
+    except Exception:
+        pass
+    msg = "✅ تم تفعيل التعليمات — ستظهر تلقائياً للمستخدمين الجدد" if enabled else "⏸️ تم إيقاف التعليمات"
+    return jsonify({"success": True, "enabled": enabled, "message": msg})
+
+@app.route("/admin/api/tutorial/save_steps", methods=["POST"])
+def admin_tutorial_save_steps():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    payload = request.get_json(silent=True) or {}
+    steps = payload.get("steps")
+    if not isinstance(steps, list):
+        return jsonify({"success": False, "message": "الخطوات يجب أن تكون قائمة"}), 400
+    data = load_tutorial_data()
+    data["steps"] = steps
+    save_tutorial_data(data)
+    return jsonify({"success": True, "message": f"✅ تم حفظ {len(steps)} خطوة بنجاح"})
+
+@app.route("/admin/api/tutorial/reset_steps", methods=["POST"])
+def admin_tutorial_reset_steps():
+    if not session.get("admin_auth"):
+        return jsonify({"success": False, "message": "غير مخول"}), 403
+    data = load_tutorial_data()
+    data["steps"] = _DEFAULT_TUTORIAL_STEPS
+    save_tutorial_data(data)
+    return jsonify({"success": True, "message": f"✅ تم استعادة {len(_DEFAULT_TUTORIAL_STEPS)} خطوة افتراضية"})
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     print(f"🌐 تشغيل الخادم على المنفذ {port}...")
