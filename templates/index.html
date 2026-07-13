@@ -943,10 +943,10 @@
                                 </label>
                                 
                                 <!-- منطقة السحب والإفلات -->
-                                <div id="dropZone" class="border border-2 border-dashed border-secondary rounded p-4 text-center mb-3" 
-                                     style="min-height: 120px; cursor: pointer; transition: all 0.3s ease;">
-                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i>
-                                    <h6 class="text-muted">اسحب الصور هنا أو انقر للاختيار</h6>
+                                <div id="dropZone" class="border border-2 border-dashed border-secondary rounded p-1 text-center mb-3" 
+                                     style="min-height: 30px; cursor: pointer; transition: all 0.3s ease;">
+                                    <i class="fas fa-cloud-upload-alt fa-1x text-muted mb-1"></i>
+                                    <h6 class="text-muted" style="font-size:0.8rem;margin:2px 0;">اسحب الصور هنا أو انقر للاختيار</h6>
                                     <p class="text-muted small mb-0">
                                         <i class="fas fa-info-circle me-1"></i>
                                         يدعم: JPG, PNG, GIF, WebP | الحد الأقصى: 10MB لكل صورة
@@ -1026,12 +1026,23 @@
                                     <option value="always" {{ 'selected' if settings.sanitize_mode == 'always' else '' }}>🛡️ تنقية — أرسل مع حذف الروابط دائماً</option>
                                     <option value="off"    {{ 'selected' if settings.sanitize_mode == 'off'    else '' }}>🚫 معطّل — أرسل كما هي (خطر حظر)</option>
                                 </select>
-                                <div class="form-text">
-                                    <strong>🤖 ذكي (salam) [افتراضي]:</strong> يرسل "السلام عليكم" أولاً، ينتظر مدة interval، فإن وصلت ≥3 رسائل عدّل إلى رسالتك، وإلا حذف وأعاد الدورة. يُوقف تلقائياً عند تغيير الوضع. <br>
-                                    <strong>⏭️ تخطي:</strong> يتجاهل المجموعات المحمية تماماً — الأأمن للحساب. <br>
-                                    <strong>🧠 ذكية:</strong> يحذف الروابط والأرقام تلقائياً قبل الإرسال للمجموعات المحمية. <br>
-                                    <strong>🛡️ تنقية:</strong> يحذف الروابط من كل رسالة لجميع المجموعات. <br>
-                                    <strong>🚫 معطّل:</strong> يرسل الرسالة كما هي بدون تنقية (خطر حظر).
+                                <div class="mt-1">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start" 
+                                            data-bs-toggle="collapse" data-bs-target="#modeDescCollapse" 
+                                            aria-expanded="false" aria-controls="modeDescCollapse"
+                                            style="font-size:0.8rem;">
+                                        <i class="fas fa-info-circle me-1 text-info"></i>شرح أوضاع الإرسال
+                                        <i class="fas fa-chevron-down float-end mt-1" style="font-size:0.7rem;"></i>
+                                    </button>
+                                    <div class="collapse" id="modeDescCollapse">
+                                        <div class="card card-body p-2 mt-1 border-secondary" style="font-size:0.82rem;background:rgba(0,0,0,0.15);">
+                                            <div class="mb-1"><strong>🤖 ذكي (salam) [افتراضي]:</strong> يرسل "السلام عليكم" أولاً، ينتظر مدة interval، فإن وصلت ≥3 رسائل عدّل إلى رسالتك، وإلا حذف وأعاد الدورة. يُوقف تلقائياً عند تغيير الوضع.</div>
+                                            <div class="mb-1"><strong>⏭️ تخطي:</strong> يتجاهل المجموعات المحمية تماماً — الأأمن للحساب.</div>
+                                            <div class="mb-1"><strong>🧠 ذكية:</strong> يحذف الروابط والأرقام تلقائياً قبل الإرسال للمجموعات المحمية.</div>
+                                            <div class="mb-1"><strong>🛡️ تنقية:</strong> يحذف الروابط من كل رسالة لجميع المجموعات.</div>
+                                            <div><strong>🚫 معطّل:</strong> يرسل الرسالة كما هي بدون تنقية (خطر حظر).</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1266,8 +1277,8 @@
                 </div>
             </div>
 
-            <!-- وحدة التحكم -->
-            <div class="col-lg-6 mb-4">
+            <!-- وحدة التحكم — مخفية من الواجهة -->
+            <div class="col-lg-6 mb-4" style="display:none;">
                 <div class="card">
                     <div class="card-header bg-secondary text-white">
                         <h5 class="mb-0">

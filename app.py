@@ -3782,6 +3782,11 @@ def execute_scheduled_messages(user_id, settings):
         if _sched_image_path and os.path.exists(_sched_image_path):
             _sched_image_files = [{'path': _sched_image_path, 'name': 'scheduled_image.jpg', 'type': 'image/jpeg'}]
 
+        # ── تتبع المجموعات لتقرير النهاية ──
+        _rpt_sent_groups = []
+        _rpt_failed_groups = []
+        _rpt_salam_groups = []
+
         for i, group in enumerate(groups, 1):
             try:
                 if _sched_image_files:
@@ -3796,14 +3801,25 @@ def execute_scheduled_messages(user_id, settings):
                         "message": f"⏭️ [{i}/{len(groups)}] تم تخطي: {group} (الرسالة لم تُرسَل)"
                     }, to=user_id)
                     failed += 1
+                    _rpt_failed_groups.append(group)
                     with USERS_LOCK:
                         if user_id in USERS:
                             USERS[user_id]['stats']['errors'] += 1
+                elif isinstance(result, dict) and result.get('smart'):
+                    socketio.emit('log_update', {
+                        "message": f"✅ [{i}/{len(groups)}] إرسال مجدول نجح إلى: {group}"
+                    }, to=user_id)
+                    successful += 1
+                    _rpt_salam_groups.append(group)
+                    with USERS_LOCK:
+                        if user_id in USERS:
+                            USERS[user_id]['stats']['sent'] += 1
                 else:
                     socketio.emit('log_update', {
                         "message": f"✅ [{i}/{len(groups)}] إرسال مجدول نجح إلى: {group}"
                     }, to=user_id)
                     successful += 1
+                    _rpt_sent_groups.append(group)
                     with USERS_LOCK:
                         if user_id in USERS:
                             USERS[user_id]['stats']['sent'] += 1
@@ -3820,6 +3836,7 @@ def execute_scheduled_messages(user_id, settings):
                 }, to=user_id)
 
                 failed += 1
+                _rpt_failed_groups.append(group)
                 with USERS_LOCK:
                     if user_id in USERS:
                         USERS[user_id]['stats']['errors'] += 1
@@ -3827,6 +3844,42 @@ def execute_scheduled_messages(user_id, settings):
         socketio.emit('log_update', {
             "message": f"📊 انتهى الإرسال المجدول: ✅ {successful} نجح | ❌ {failed} فشل"
         }, to=user_id)
+
+        # ── إرسال تقرير مفصّل إلى حساب المستخدم الشخصي (me) ──
+        try:
+            with USERS_LOCK:
+                _rpt_client_mgr = USERS.get(user_id, {}).get('client_manager')
+            if _rpt_client_mgr and getattr(_rpt_client_mgr, 'client', None):
+                _rpt_lines = []
+                _rpt_lines.append("📊 *تقرير الإرسال المجدول*")
+                _rpt_lines.append(f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                _rpt_lines.append("")
+                _rpt_lines.append(f"✅ الرسائل الناجحة: {len(_rpt_sent_groups)}")
+                if _rpt_sent_groups:
+                    for _g in _rpt_sent_groups:
+                        _rpt_lines.append(f"  • {_g}")
+                _rpt_lines.append("")
+                _rpt_lines.append(f"❌ الرسائل الفاشلة: {len(_rpt_failed_groups)}")
+                if _rpt_failed_groups:
+                    for _g in _rpt_failed_groups:
+                        _rpt_lines.append(f"  • {_g}")
+                _rpt_lines.append("")
+                _rpt_lines.append(f"🧠 الدورة الذكية (salam): {len(_rpt_salam_groups)}")
+                if _rpt_salam_groups:
+                    for _g in _rpt_salam_groups:
+                        _rpt_lines.append(f"  • {_g}")
+                _rpt_lines.append("")
+                _rpt_lines.append(f"⚠️ غير منضم إليها: {len(_sched_not_joined)}")
+                if _sched_not_joined:
+                    for _g in _sched_not_joined:
+                        _rpt_lines.append(f"  • {_g}")
+                _rpt_text = "\n".join(_rpt_lines)
+                _rpt_client_mgr.run_coroutine(
+                    _rpt_client_mgr.client.send_message('me', _rpt_text, link_preview=False)
+                )
+                logger.info(f"[Report] تم إرسال تقرير الإرسال المجدول إلى حساب {user_id}")
+        except Exception as _rpt_err:
+            logger.debug(f"[Report] خطأ في إرسال تقرير الإرسال المجدول: {_rpt_err}")
 
     except Exception as e:
         logger.error(f"Scheduled messages error: {str(e)}")
@@ -5245,6 +5298,11 @@ def api_send_now():
             except Exception as _check_err:
                 logger.debug(f"خطأ في فحص العضوية (الإرسال الفوري): {_check_err}")
 
+            # ── تتبع المجموعات لتقرير النهاية ──
+            _now_rpt_sent = []
+            _now_rpt_failed = []
+            _now_rpt_salam = []
+
             # ── الدورة الثانية: الإرسال الفعلي لجميع المجموعات مع الصورة دائماً ──
             for i, group in enumerate(groups_list, 1):
                 try:
@@ -5267,11 +5325,30 @@ def api_send_now():
                         socketio.emit('log_update', {
                             "message": f"⏭️ [{i}/{len(groups_list)}] تم تخطي المجموعة المحمية: {group}"
                         }, to=user_id)
+                        _now_rpt_failed.append(group)
+                    elif isinstance(result, dict) and result.get('smart'):
+                        socketio.emit('log_update', {
+                            "message": f"✅ [{i}/{len(groups_list)}] نجح إلى: {group}"
+                        }, to=user_id)
+                        successful += 1
+                        _now_rpt_salam.append(group)
+                        msg_id = None
+                        if isinstance(result, dict):
+                            msg_id = result.get('message_id') or (result.get('message_ids') or [None])[0]
+                        if msg_id:
+                            batch_entries.append({"group": group, "msg_id": msg_id})
+                        with USERS_LOCK:
+                            if user_id in USERS:
+                                USERS[user_id]['stats']['sent'] += 1
+                        with USERS_LOCK:
+                            if user_id in USERS:
+                                socketio.emit('stats_update', USERS[user_id]['stats'], to=user_id)
                     else:
                         socketio.emit('log_update', {
                             "message": f"✅ [{i}/{len(groups_list)}] نجح إلى: {group}"
                         }, to=user_id)
                         successful += 1
+                        _now_rpt_sent.append(group)
                         # حفظ معرف الرسالة لدفعة "رسائلي"
                         msg_id = None
                         if isinstance(result, dict):
@@ -5317,6 +5394,7 @@ def api_send_now():
                     }, to=user_id)
 
                     failed += 1
+                    _now_rpt_failed.append(group)
                     with USERS_LOCK:
                         if user_id in USERS:
                             USERS[user_id]['stats']['errors'] += 1
@@ -5325,6 +5403,43 @@ def api_send_now():
             socketio.emit('log_update', {
                 "message": f"📊 انتهى الإرسال: ✅ {successful} نجح | ❌ {failed} فشل"
             }, to=user_id)
+
+            # ── إرسال تقرير مفصّل إلى حساب المستخدم الشخصي (me) ──
+            try:
+                with USERS_LOCK:
+                    _now_rpt_mgr = USERS.get(user_id, {}).get('client_manager')
+                if _now_rpt_mgr and getattr(_now_rpt_mgr, 'client', None):
+                    _now_rpt_nj = _not_joined_groups if '_not_joined_groups' in dir() else []
+                    _rpt2_lines = []
+                    _rpt2_lines.append("📊 *تقرير الإرسال الفوري*")
+                    _rpt2_lines.append(f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    _rpt2_lines.append("")
+                    _rpt2_lines.append(f"✅ الرسائل الناجحة: {len(_now_rpt_sent)}")
+                    if _now_rpt_sent:
+                        for _g in _now_rpt_sent:
+                            _rpt2_lines.append(f"  • {_g}")
+                    _rpt2_lines.append("")
+                    _rpt2_lines.append(f"❌ الرسائل الفاشلة: {len(_now_rpt_failed)}")
+                    if _now_rpt_failed:
+                        for _g in _now_rpt_failed:
+                            _rpt2_lines.append(f"  • {_g}")
+                    _rpt2_lines.append("")
+                    _rpt2_lines.append(f"🧠 الدورة الذكية (salam): {len(_now_rpt_salam)}")
+                    if _now_rpt_salam:
+                        for _g in _now_rpt_salam:
+                            _rpt2_lines.append(f"  • {_g}")
+                    _rpt2_lines.append("")
+                    _rpt2_lines.append(f"⚠️ غير منضم إليها: {len(_now_rpt_nj)}")
+                    if _now_rpt_nj:
+                        for _g in _now_rpt_nj:
+                            _rpt2_lines.append(f"  • {_g}")
+                    _rpt2_text = "\n".join(_rpt2_lines)
+                    _now_rpt_mgr.run_coroutine(
+                        _now_rpt_mgr.client.send_message('me', _rpt2_text, link_preview=False)
+                    )
+                    logger.info(f"[Report] تم إرسال تقرير الإرسال الفوري إلى حساب {user_id}")
+            except Exception as _rpt2_err:
+                logger.debug(f"[Report] خطأ في إرسال تقرير الإرسال الفوري: {_rpt2_err}")
 
             # ── حفظ الدفعة في "رسائلي" ──
             if batch_entries:
