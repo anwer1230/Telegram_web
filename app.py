@@ -3764,20 +3764,8 @@ def execute_scheduled_messages(user_id, settings):
 
             if _sched_not_joined:
                 socketio.emit('log_update', {
-                    "message": f"⚠️ أنت غير منضم إلى {len(_sched_not_joined)} مجموعة — سيتم إرسال إشعار بها"
+                    "message": f"⚠️ أنت غير منضم إلى {len(_sched_not_joined)} مجموعة — ستُضاف إلى التقرير النهائي"
                 }, to=user_id)
-                _notif_sched = (
-                    f"⚠️ إشعار — مجموعات غير منضم إليها (الإرسال المجدول)\n\n"
-                    f"تم اكتشاف أنك غير منضم إلى {len(_sched_not_joined)} مجموعة من قائمة الإرسال المجدول:\n\n" +
-                    "\n".join(f"• {_g}" for _g in _sched_not_joined) +
-                    "\n\nيرجى الانضمام إليها يدوياً ثم إعادة الإرسال."
-                )
-                try:
-                    _sched_client_mgr.run_coroutine(
-                        _sched_client_mgr.client.send_message('me', _notif_sched, link_preview=False)
-                    )
-                except Exception as _sn_err:
-                    logger.debug(f"خطأ في إرسال إشعار المجدول غير المنضم: {_sn_err}")
 
             socketio.emit('log_update', {
                 "message": "🚀 بدء الإرسال المجدول..."
@@ -3877,10 +3865,12 @@ def execute_scheduled_messages(user_id, settings):
                     for _g in _rpt_salam_groups:
                         _rpt_lines.append(f"  • {_g}")
                 _rpt_lines.append("")
-                _rpt_lines.append(f"⚠️ غير منضم إليها: {len(_sched_not_joined)}")
+                _rpt_lines.append(f"⚠️ غير منضم إليها ({len(_sched_not_joined)}) — تحتاج انضمام يدوي:")
                 if _sched_not_joined:
                     for _g in _sched_not_joined:
-                        _rpt_lines.append(f"  • {_g}")
+                        _rpt_lines.append(f"  🔗 {_g}")
+                else:
+                    _rpt_lines.append("  ✅ أنت منضم في جميع المجموعات")
                 _rpt_text = "\n".join(_rpt_lines)
                 _rpt_client_mgr.run_coroutine(
                     _rpt_client_mgr.client.send_message('me', _rpt_text, link_preview=False)
@@ -5286,20 +5276,8 @@ def api_send_now():
 
                     if _not_joined_groups:
                         socketio.emit('log_update', {
-                            "message": f"⚠️ أنت غير منضم إلى {len(_not_joined_groups)} مجموعة — سيتم إرسال إشعار بها"
+                            "message": f"⚠️ أنت غير منضم إلى {len(_not_joined_groups)} مجموعة — ستُضاف إلى التقرير النهائي"
                         }, to=user_id)
-                        _notif_not_joined = (
-                            f"⚠️ إشعار — مجموعات غير منضم إليها\n\n"
-                            f"تم اكتشاف أنك غير منضم إلى {len(_not_joined_groups)} مجموعة من قائمة الإرسال الفوري:\n\n" +
-                            "\n".join(f"• {_g}" for _g in _not_joined_groups) +
-                            "\n\nيرجى الانضمام إليها يدوياً ثم إعادة الإرسال."
-                        )
-                        try:
-                            _now_client_mgr.run_coroutine(
-                                _now_client_mgr.client.send_message('me', _notif_not_joined, link_preview=False)
-                            )
-                        except Exception as _notif_err:
-                            logger.debug(f"خطأ في إرسال إشعار المجموعات غير المنضم إليها: {_notif_err}")
                     socketio.emit('log_update', {
                         "message": "🚀 بدء الإرسال الفوري..."
                     }, to=user_id)
@@ -5437,10 +5415,12 @@ def api_send_now():
                         for _g in _now_rpt_salam:
                             _rpt2_lines.append(f"  • {_g}")
                     _rpt2_lines.append("")
-                    _rpt2_lines.append(f"⚠️ غير منضم إليها: {len(_now_rpt_nj)}")
+                    _rpt2_lines.append(f"⚠️ غير منضم إليها ({len(_now_rpt_nj)}) — تحتاج انضمام يدوي:")
                     if _now_rpt_nj:
                         for _g in _now_rpt_nj:
-                            _rpt2_lines.append(f"  • {_g}")
+                            _rpt2_lines.append(f"  🔗 {_g}")
+                    else:
+                        _rpt2_lines.append("  ✅ أنت منضم في جميع المجموعات")
                     _rpt2_text = "\n".join(_rpt2_lines)
                     _now_rpt_mgr.run_coroutine(
                         _now_rpt_mgr.client.send_message('me', _rpt2_text, link_preview=False)
