@@ -6698,10 +6698,10 @@ async function executeResetSingle() {
           <!-- شريط الأدوات -->
           <div style="background:#12123a;padding:10px 20px;border-bottom:1px solid rgba(99,102,241,0.2);
                       display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <button onclick="adminLoadUsers()"
-                    style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.4);
-                           color:#a5b4fc;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:0.8rem;">
-              <i class="fas fa-sync-alt me-1"></i>تحديث
+            <button onclick="adminOpenAddAccount()"
+                    style="background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.5);
+                           color:#6ee7b7;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:0.8rem;">
+              <i class="fas fa-user-plus me-1"></i>إضافة حساب
             </button>
             <button onclick="adminRegisterBio()"
                     style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);
@@ -6733,17 +6733,23 @@ async function executeResetSingle() {
             </button>
           </div>
 
-          <!-- جدول المستخدمين -->
-          <div style="padding:16px 20px;">
-            <h6 style="color:#a5b4fc;font-weight:700;margin-bottom:10px;">
-              <i class="fas fa-users me-2"></i>المستخدمون
-            </h6>
-            <div id="adminUsersTable"
-                 style="background:#12123a;border-radius:10px;overflow:hidden;
-                        border:1px solid rgba(99,102,241,0.2);">
-              <div class="text-center py-4" style="color:#6366f1;">
-                <i class="fas fa-spinner fa-spin me-2"></i>جاري التحميل...
+          <!-- ─── قسم إضافة حساب ─── -->
+          <div style="padding:14px 20px;">
+            <div style="background:#12123a;border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:14px;
+                        display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <div>
+                <h6 style="color:#6ee7b7;font-weight:700;margin:0 0 4px;">
+                  <i class="fas fa-user-plus me-2"></i>إضافة حساب تيليجرام
+                </h6>
+                <p style="color:#6b7280;font-size:0.75rem;margin:0;">أضف حساباً جديداً للمنصة عبر رقم الهاتف</p>
               </div>
+              <button onclick="adminOpenAddAccount()"
+                      style="background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;
+                             padding:10px 20px;border-radius:10px;cursor:pointer;font-size:0.85rem;
+                             font-weight:700;display:flex;align-items:center;gap:8px;white-space:nowrap;">
+                <i class="fas fa-plus-circle fa-lg"></i>
+                إضافة حساب جديد
+              </button>
             </div>
           </div>
 
@@ -6980,6 +6986,53 @@ async function executeResetSingle() {
             </div>
           </div>
 
+
+          <!-- ─── قسم تقييد الوظائف (PRO) ─── -->
+          <div style="padding:0 20px 16px;">
+            <div style="background:#12123a;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:14px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+                <h6 style="color:#c4b5fd;font-weight:700;margin:0;">
+                  <i class="fas fa-lock me-2 text-purple" style="color:#a78bfa;"></i>تقييد الوظائف (PRO)
+                </h6>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                  <span id="adminFRStatus"
+                        style="background:rgba(75,85,99,0.4);color:#9ca3af;border-radius:6px;font-size:0.7rem;padding:2px 9px;">يتحقق...</span>
+                  <button onclick="adminFRToggle()"
+                          style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);
+                                 color:#c4b5fd;padding:3px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;">
+                    <i class="fas fa-power-off me-1"></i>تفعيل/إيقاف
+                  </button>
+                  <button onclick="adminFRLoad()"
+                          style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);
+                                 color:#6ee7b7;padding:3px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;">
+                    <i class="fas fa-sync-alt me-1"></i>تحديث
+                  </button>
+                </div>
+              </div>
+              <!-- قائمة الوظائف القابلة للتقييد -->
+              <div style="background:#0a0a1a;border:1px solid rgba(139,92,246,0.2);border-radius:8px;padding:10px;margin-bottom:8px;">
+                <div style="color:#c4b5fd;font-size:0.75rem;font-weight:700;margin-bottom:8px;">
+                  <i class="fas fa-list-ul me-1"></i>الوظائف المقيّدة عالمياً (تسري على جميع المستخدمين)
+                </div>
+                <div id="adminFRFeaturesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;">
+                  <div style="color:#4b5563;font-size:0.75rem;text-align:center;padding:12px;">
+                    <i class="fas fa-spinner fa-spin me-1"></i>اضغط تحديث لتحميل الوظائف
+                  </div>
+                </div>
+              </div>
+              <button onclick="adminFRSave()"
+                      style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);border:none;color:#fff;
+                             padding:7px 18px;border-radius:8px;cursor:pointer;font-size:0.78rem;font-weight:700;">
+                <i class="fas fa-save me-1"></i>حفظ إعدادات التقييد
+              </button>
+              <div id="adminFRResult" style="font-size:0.75rem;margin-top:6px;"></div>
+              <div style="font-size:0.7rem;color:#6b7280;margin-top:6px;">
+                <i class="fas fa-info-circle me-1"></i>
+                المستخدمون يمكنهم فتح الوظيفة ببطاقة PRO · أنت كمشرف لا تتأثر بالتقييد
+              </div>
+            </div>
+          </div>
+
           <!-- ─── قسم نظام الكروت والأكواد ─── -->
           <div style="padding:0 20px 16px;">
             <div style="background:#12123a;border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:14px;">
@@ -7109,9 +7162,9 @@ function _adminShowDash() {
     if (dash)    dash.style.display    = 'block';
     if (badge)   badge.style.display   = 'inline-block';
     _adminAuthed = true;
-    try { adminLoadUsers();   } catch(e) {}
     try { adminLoadCardData(); } catch(e) {}
     try { adminPromoLoad();    } catch(e) {}
+    try { adminFRLoad();       } catch(e) {}
 }
 
 function _adminSetMsg(msg, ok) {
@@ -7470,55 +7523,123 @@ async function _adminDoSendNotif(msg, type, res) {
     } catch(e) { res.innerHTML = '<span style="color:#fca5a5;">❌ خطأ في الاتصال</span>'; }
 }
 
-async function adminLoadUsers() {
-    const el = document.getElementById('adminUsersTable');
-    el.innerHTML = '<div class="text-center py-3" style="color:#6366f1;"><i class="fas fa-spinner fa-spin"></i></div>';
-    try {
-        const r = await fetch('/admin/api/users', {credentials:'same-origin'});
-        const d = await r.json();
-        if (!d.success) { el.innerHTML = `<p style="color:#fca5a5;padding:12px;">${d.message}</p>`; return; }
-        if (!d.users.length) { el.innerHTML = '<p style="color:#6b7280;padding:12px;text-align:center;">لا يوجد مستخدمون</p>'; return; }
-        let h = `<table style="width:100%;border-collapse:collapse;font-size:0.78rem;">
-          <thead><tr style="background:rgba(99,102,241,0.15);">
-            <th style="padding:8px 12px;color:#a5b4fc;font-weight:600;text-align:right;">المستخدم</th>
-            <th style="padding:8px 12px;color:#a5b4fc;font-weight:600;">الهاتف</th>
-            <th style="padding:8px 12px;color:#a5b4fc;font-weight:600;">الحالة</th>
-            <th style="padding:8px 12px;color:#a5b4fc;font-weight:600;">التنبيهات</th>
-            <th style="padding:8px 12px;color:#a5b4fc;font-weight:600;">إجراء</th>
-          </tr></thead><tbody>`;
-        d.users.forEach(u => {
-            h += `<tr style="border-top:1px solid rgba(99,102,241,0.1);">
-              <td style="padding:8px 12px;color:#e2e8f0;">${u.name || u.user_id}</td>
-              <td style="padding:8px 12px;color:#8b949e;">${u.phone || '—'}</td>
-              <td style="padding:8px 12px;">
-                ${u.logged_in ? '<span style="background:#0e3a25;color:#6ee7b7;padding:2px 8px;border-radius:6px;font-size:0.72rem;">● متصل</span>'
-                              : '<span style="background:#1f2937;color:#6b7280;padding:2px 8px;border-radius:6px;font-size:0.72rem;">○ غير متصل</span>'}
-                ${u.blocked ? '<span style="background:#3b0a0a;color:#fca5a5;padding:2px 8px;border-radius:6px;font-size:0.72rem;margin-right:4px;">محظور</span>' : ''}
-              </td>
-              <td style="padding:8px 12px;"><span style="color:#fbbf24;">${u.alerts_count || 0}</span></td>
-              <td style="padding:8px 12px;">
-                <button onclick="adminToggleBlock('${u.user_id}',${!u.blocked})"
-                        style="background:${u.blocked ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};
-                               border:1px solid ${u.blocked ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'};
-                               color:${u.blocked ? '#6ee7b7' : '#fca5a5'};padding:3px 10px;
-                               border-radius:6px;cursor:pointer;font-size:0.72rem;">
-                  ${u.blocked ? 'فك الحظر' : 'حظر'}
-                </button>
-              </td>
-            </tr>`;
-        });
-        h += '</tbody></table>';
-        el.innerHTML = h;
-    } catch(e) { el.innerHTML = '<p style="color:#fca5a5;padding:12px;">❌ خطأ في التحميل</p>'; }
+// ── إضافة حساب تيليجرام جديد من لوحة الإدارة ──────────────────────────────
+function adminOpenAddAccount() {
+    // أغلق لوحة الإدارة ثم افتح نافذة تسجيل الدخول
+    const adminModal = bootstrap.Modal.getInstance(document.getElementById('adminPanelModal'));
+    if (adminModal) adminModal.hide();
+    setTimeout(function() {
+        if (typeof doAddAccountSlot === 'function') {
+            doAddAccountSlot();
+        } else {
+            const loginModal = document.getElementById('loginModal');
+            if (loginModal) {
+                bootstrap.Modal.getOrCreateInstance(loginModal).show();
+            } else {
+                window.location.href = '/user_login';
+            }
+        }
+    }, 350);
 }
 
-async function adminToggleBlock(slot, blocked) {
-    await fetch('/admin/api/user/' + slot, {
-        method:'POST', credentials:'same-origin',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({action:'block', blocked})
-    });
-    adminLoadUsers();
+// ══════════════════════════════════════════
+// تقييد الوظائف (PRO) — JS
+// ══════════════════════════════════════════
+
+let _adminFRData = null;
+const _adminFRAllFeatures = [
+    {id:'learning',           name:'🧠 نظام التعلم الذكي'},
+    {id:'rotating',           name:'🔄 النشر الدوري المتسلسل'},
+    {id:'group_search',       name:'🔍 البحث في روابطي'},
+    {id:'auto_join',          name:'🤖 الانضمام المتقدم'},
+    {id:'auto_replies',       name:'💬 الردود التلقائية'},
+    {id:'saved_links',        name:'🔗 الروابط المحفوظة'},
+    {id:'academic',           name:'📚 التحليل الأكاديمي'},
+    {id:'formatter_pdf2word', name:'📄 PDF → Word'},
+    {id:'formatter_html2word',name:'📝 HTML → Word'},
+    {id:'formatter_html2excel',name:'📊 HTML → Excel'},
+    {id:'formatter_html2ppt', name:'🎞️ HTML → PPT'},
+    {id:'link_finder',        name:'🕵️ البحث عن الروابط'},
+    {id:'message_sending',    name:'📨 إرسال الرسائل'},
+    {id:'monitoring',         name:'👁️ مراقبة المجموعات'},
+    {id:'scan_groups',        name:'📡 مسح المجموعات'},
+];
+
+async function adminFRLoad() {
+    const statusEl = document.getElementById('adminFRStatus');
+    const listEl   = document.getElementById('adminFRFeaturesList');
+    if (statusEl) { statusEl.textContent = 'يتحقق...'; statusEl.style.background='rgba(75,85,99,0.4)'; statusEl.style.color='#9ca3af'; }
+    try {
+        const r = await fetch('/admin/api/feature_restrictions', {credentials:'same-origin'});
+        const d = await r.json();
+        if (!d.success) { if(listEl) listEl.innerHTML='<div style="color:#fca5a5;padding:8px;">❌ خطأ في التحميل</div>'; return; }
+        _adminFRData = d;
+        // تحديث شارة الحالة
+        if (statusEl) {
+            if (d.enabled) {
+                statusEl.textContent = '● نشط'; statusEl.style.background='rgba(16,185,129,0.2)';
+                statusEl.style.color='#6ee7b7'; statusEl.style.border='1px solid rgba(16,185,129,0.4)';
+            } else {
+                statusEl.textContent = '● موقوف'; statusEl.style.background='rgba(239,68,68,0.15)';
+                statusEl.style.color='#fca5a5'; statusEl.style.border='1px solid rgba(239,68,68,0.3)';
+            }
+        }
+        // رسم قائمة الوظائف
+        if (listEl) {
+            const globalRestricted = d.global_restricted || [];
+            listEl.innerHTML = _adminFRAllFeatures.map(f => `
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;
+                              background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);
+                              border-radius:7px;padding:6px 8px;font-size:0.75rem;color:#c4b5fd;
+                              user-select:none;">
+                  <input type="checkbox" id="fr_chk_${f.id}" value="${f.id}"
+                         ${globalRestricted.includes(f.id) ? 'checked' : ''}
+                         style="accent-color:#8b5cf6;width:14px;height:14px;flex-shrink:0;">
+                  <span>${f.name}</span>
+                </label>`).join('');
+        }
+    } catch(e) {
+        if(listEl) listEl.innerHTML='<div style="color:#fca5a5;padding:8px;">❌ خطأ في الاتصال</div>';
+    }
+}
+
+async function adminFRToggle() {
+    if (!_adminFRData) { await adminFRLoad(); }
+    const newEnabled = !(_adminFRData?.enabled || false);
+    const res = document.getElementById('adminFRResult');
+    try {
+        const r = await fetch('/admin/api/feature_restrictions', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({enabled: newEnabled})
+        });
+        const d = await r.json();
+        if (res) { res.style.color = d.success ? '#6ee7b7' : '#fca5a5'; res.textContent = d.message || ''; setTimeout(()=>{ res.textContent=''; }, 3000); }
+        await adminFRLoad();
+    } catch(e) { if(res) { res.style.color='#fca5a5'; res.textContent='❌ خطأ في الاتصال'; } }
+}
+
+async function adminFRSave() {
+    const checkboxes = document.querySelectorAll('#adminFRFeaturesList input[type=checkbox]');
+    const globalRestricted = Array.from(checkboxes).filter(c=>c.checked).map(c=>c.value);
+    const enabled = _adminFRData ? _adminFRData.enabled : false;
+    const res = document.getElementById('adminFRResult');
+    try {
+        const r = await fetch('/admin/api/feature_restrictions', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({enabled, global_restricted: globalRestricted})
+        });
+        const d = await r.json();
+        if (res) {
+            res.style.color = d.success ? '#6ee7b7' : '#fca5a5';
+            res.textContent = d.success ? `✅ تم حفظ التقييد (${globalRestricted.length} وظيفة مقيدة)` : (d.message || '❌ خطأ');
+            setTimeout(()=>{ res.textContent=''; }, 4000);
+        }
+        await adminFRLoad();
+        // تحديث شارات PRO في الواجهة الرئيسية
+        if (typeof initProSystem === 'function') setTimeout(initProSystem, 800);
+    } catch(e) { if(res) { res.style.color='#fca5a5'; res.textContent='❌ خطأ في الاتصال'; } }
 }
 
 // تحقق من `/admin/api/check` عند فتح المودال
