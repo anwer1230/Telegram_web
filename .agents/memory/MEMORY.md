@@ -1,0 +1,1 @@
+- [GitHub push safety](github-push-safety.md) — use secure Replit credentials or an ephemeral askpass flow; never place tokens in remotes, files, or chat.
