@@ -1,23 +1,18 @@
 services:
   - type: web
-    name: saraa-services
-    env: python
+    name: telegram-web
+    env: node
     region: frankfurt
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    healthCheckPath: /
     envVars:
-      - key: RENDER
-        value: "true"
       - key: SESSION_SECRET
         generateValue: true
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
       - key: GROQ_API_KEY
         sync: false
-      - key: GITHUB_TOKEN
-        sync: false
-      - key: GITHUB_REPO
-        sync: false
-      - key: GITHUB_BRANCH
-        value: main
-      - key: PORT
-        value: "10000"
