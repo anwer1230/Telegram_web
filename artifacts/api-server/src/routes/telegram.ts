@@ -43,20 +43,21 @@ router.get("/telegram/status", async (req, res) => {
 });
 
 router.post("/telegram/auth/start", async (req, res) => {
-  const phone = typeof req.body?.phone === "string" ? req.body.phone : "";
-  let id = req.cookies?.[COOKIE];
-  let session = getSession(id);
-  if (!session) {
-    id = createSession();
-    session = getSession(id);
-  }
-  if (!session) return res.status(500).json({ error: "SESSION_CREATE_FAILED" });
   try {
+    const phone = typeof req.body?.phone === "string" ? req.body.phone : "";
+    let id = req.cookies?.[COOKIE];
+    let session = getSession(id);
+    if (!session) {
+      id = createSession();
+      session = getSession(id);
+    }
+    if (!session || !id) return res.status(500).json({ error: "SESSION_CREATE_FAILED" });
     const result = await startPhoneAuth(session, phone);
     res.cookie(COOKIE, id, cookieOptions);
     return res.json({ state: "code", ...result });
   } catch (error) {
-    return res.status(400).json({ error: authError(error) });
+    const code = authError(error);
+    return res.status(code === "TELEGRAM_API_NOT_CONFIGURED" ? 503 : 400).json({ error: code });
   }
 });
 

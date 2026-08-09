@@ -114,6 +114,7 @@ function AuthScreen({ onAuthenticated, onClose, modal = false }: { onAuthenticat
         PHONE_CODE_EXPIRED: 'انتهت صلاحية الرمز، اطلب رمزاً جديداً.',
         PASSWORD_HASH_INVALID: 'كلمة مرور التحقق غير صحيحة.',
         AUTH_SESSION_EXPIRED: 'انتهت جلسة التسجيل، ابدأ من جديد.',
+        TELEGRAM_API_NOT_CONFIGURED: 'خدمة Telegram غير مهيأة في الخادم. أضف بيانات Telegram API ثم أعد المحاولة.',
       };
       setError(labels[message] || `تعذر إكمال التسجيل (${message}).`);
     } finally {

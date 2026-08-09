@@ -19,7 +19,7 @@ function credentials() {
   const apiId = Number(process.env.TELEGRAM_API_ID);
   const apiHash = process.env.TELEGRAM_API_HASH;
   if (!Number.isInteger(apiId) || apiId <= 0 || !apiHash) {
-    throw new Error("Telegram API credentials are not configured");
+    throw new Error("TELEGRAM_API_NOT_CONFIGURED");
   }
   return { apiId, apiHash };
 }
