@@ -8,6 +8,9 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+.env
+.env.*
+!.env.example
 .expo
 .expo-shared
 

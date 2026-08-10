@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
+    "dev": "export NODE_ENV=development LEGACY_FLASK_ENABLED=${LEGACY_FLASK_ENABLED:-true} LEGACY_FLASK_PORT=${LEGACY_FLASK_PORT:-5001} && pnpm run build && pnpm run start",
     "build": "BASE_PATH=/ PORT=3000 pnpm --filter @workspace/app run build && node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -15,6 +15,7 @@
     "bufferutil": "^4.1.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
     "drizzle-orm": "catalog:",
     "express": "^5.2.1",
     "pino": "^9.14.0",

@@ -4,7 +4,7 @@ services:
     env: node
     region: frankfurt
     plan: free
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    buildCommand: pip install -r requirements.txt && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
     startCommand: pnpm --filter @workspace/api-server run start
     healthCheckPath: /
     envVars:
@@ -16,3 +16,13 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPO
+        value: anwer1230/-Anwer_program
+      - key: GITHUB_BRANCH
+        value: main
+      - key: LEGACY_FLASK_ENABLED
+        value: "true"
+      - key: LEGACY_FLASK_PORT
+        value: "5001"

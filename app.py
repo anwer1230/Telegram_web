@@ -62,6 +62,12 @@ import json
 import uuid
 import time
 import logging
+from dotenv import load_dotenv
+
+# Load local configuration before importing the application subsystems.
+# Environment variables supplied by the hosting platform remain supported,
+# but local `.env` values are available without waiting for platform setup.
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 # ── وحدات منفصلة للأنظمة الفرعية (card_system, gps_tracking, isolation_system) ──
 try:
@@ -807,20 +813,14 @@ def _ensure_shared_login_loop():
             _SHARED_LOGIN_LOOP_READY.wait(timeout=10)
     return _SHARED_LOGIN_LOOP
 
-# بيانات Telegram API — مدمجة مع دعم متغيرات البيئة
-_TG_ID_PARTS   = ['220', '439', '94']
-_TG_HASH_PARTS = ['56f645', '82b363d3', '67280db9', '6586b97801']
-API_ID   = os.environ.get('TELEGRAM_API_ID',   ''.join(_TG_ID_PARTS))
-API_HASH = os.environ.get('TELEGRAM_API_HASH', ''.join(_TG_HASH_PARTS))
-
-# مفتاح الذكاء الاصطناعي GROQ — مدمج مع دعم متغيرات البيئة
-_GROQ_PARTS  = ['gsk_ZNr7uNRZ', '6EyZUASH1oB', 'dWGdyb3FYwx', 'Jpzik4OICbSNCIntD4wFFV']
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY', ''.join(_GROQ_PARTS))
+# Runtime configuration is intentionally sourced from `.env` or the hosting
+# environment. No credentials are embedded in the source code.
+API_ID       = os.environ.get('TELEGRAM_API_ID', '').strip()
+API_HASH     = os.environ.get('TELEGRAM_API_HASH', '').strip()
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '').strip()
 os.environ.setdefault('GROQ_API_KEY', GROQ_API_KEY)
 
-# بيانات GitHub للمساعد الذكي — مدمجة مع دعم متغيرات البيئة
-_GH_PARTS     = ['ghp_GftPCtf', 'ME9pR6dfPu', 'KkEuHqK4hC', 'QjV2OtIM3']
-GITHUB_TOKEN  = os.environ.get('GITHUB_TOKEN',  ''.join(_GH_PARTS))
+GITHUB_TOKEN  = os.environ.get('GITHUB_TOKEN', '').strip()
 GITHUB_REPO   = os.environ.get('GITHUB_REPO',   'anwer1230/-Anwer_program')
 GITHUB_BRANCH = os.environ.get('GITHUB_BRANCH', 'main')
 
